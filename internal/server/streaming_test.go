@@ -117,3 +117,45 @@ func TestTextNonStreaming(t *testing.T) {
 		t.Errorf("body = %s", body)
 	}
 }
+
+// TestTextStreamingMultiRound verifies two consecutive streaming requests work
+// over the same keep-alive client connection (no truncation on round 2), and
+// that SSE responses carry the no-buffer headers for nginx/proxies.
+func TestTextStreamingMultiRound(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fl, _ := w.(http.Flusher)
+		_, _ = io.WriteString(w, "data: {\"id\":\"a\"}\n\n")
+		_, _ = io.WriteString(w, "data: {\"id\":\"b\"}\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+		if fl != nil {
+			fl.Flush()
+		}
+	}))
+	defer upstream.Close()
+
+	cfg := newTestConfig(upstream.URL+"/compatible-mode/v1", "http://img.invalid", "")
+	ts := newGateway(t, cfg)
+
+	client := ts.Client() // reuses keep-alive connections
+	for round := 1; round <= 2; round++ {
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/chat/completions",
+			strings.NewReader(`{"model":"qwen3.8-max","messages":[{"role":"user","content":"hi"}],"stream":true}`))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("round %d: %v", round, err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("round %d status = %d", round, resp.StatusCode)
+		}
+		if !strings.Contains(string(body), "[DONE]") {
+			t.Fatalf("round %d missing [DONE]: %q", round, string(body))
+		}
+		if got := resp.Header.Get("X-Accel-Buffering"); got != "no" {
+			t.Errorf("round %d X-Accel-Buffering = %q, want no", round, got)
+		}
+	}
+}

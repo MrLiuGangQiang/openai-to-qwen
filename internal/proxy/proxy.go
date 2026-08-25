@@ -76,6 +76,12 @@ func NewTextProxy(textBaseURL string, timeout time.Duration, lg *logger.Logger) 
 		Transport:     NewTransport(0), // no header timeout: streaming must not be cut off
 		FlushInterval: -1,              // immediate flush for SSE streaming
 		ModifyResponse: func(resp *http.Response) error {
+			if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+				// SSE: ask proxies/nginx not to buffer so chunks flow through
+				// immediately instead of arriving as one burst.
+				resp.Header.Set("X-Accel-Buffering", "no")
+				resp.Header.Set("Cache-Control", "no-cache")
+			}
 			if infoEnabled {
 				if start, ok := resp.Request.Context().Value(reqStartKey{}).(time.Time); ok {
 					lg.Infof("text upstream url=%s status=%d duration=%s content_type=%s",
