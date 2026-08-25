@@ -18,7 +18,9 @@ import (
 const ExposedPrefix = "/v1"
 
 // NewTransport returns a tuned, shared http.Transport for upstream calls.
-func NewTransport(timeout time.Duration) *http.Transport {
+// responseHeaderTimeout <= 0 disables the response-header timeout, which is
+// recommended for streaming endpoints where the first byte may be slow.
+func NewTransport(responseHeaderTimeout time.Duration) *http.Transport {
 	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
@@ -31,7 +33,7 @@ func NewTransport(timeout time.Duration) *http.Transport {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		ResponseHeaderTimeout: timeout,
+		ResponseHeaderTimeout: responseHeaderTimeout,
 	}
 }
 
@@ -56,8 +58,8 @@ func NewTextProxy(textBaseURL, apiKey string, timeout time.Duration, logger *log
 			req.Host = upstream.Host
 			req.Header.Set("Authorization", "Bearer "+apiKey)
 		},
-		Transport:     NewTransport(timeout),
-		FlushInterval: -1, // immediate flush for SSE streaming
+		Transport:     NewTransport(0), // no header timeout: streaming must not be cut off
+		FlushInterval: -1,              // immediate flush for SSE streaming
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
 			logger.Printf("text upstream error: %v", err)
 			WriteJSONError(w, http.StatusBadGateway, "upstream request failed")

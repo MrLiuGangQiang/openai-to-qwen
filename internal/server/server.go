@@ -110,6 +110,19 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
+// Flush makes the recorder transparent for streaming (SSE) responses so
+// httputil.ReverseProxy can flush each chunk immediately.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap lets http.ResponseController reach the underlying writer.
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
+
 // loggingMiddleware emits a single access log line per request. Bodies are
 // never logged.
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
