@@ -33,7 +33,7 @@ func TestTextStreaming(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	cfg := newTestConfig(upstream.URL+"/compatible-mode/v1", "http://img.invalid", "sk-sp-test", "")
+	cfg := newTestConfig(upstream.URL+"/compatible-mode/v1", "http://img.invalid", "")
 	ts := newGateway(t, cfg)
 
 	resp, err := http.Post(ts.URL+"/v1/chat/completions", "application/json",
@@ -100,7 +100,7 @@ func TestTextNonStreaming(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	cfg := newTestConfig(upstream.URL+"/compatible-mode/v1", "http://img.invalid", "sk-sp-test", "")
+	cfg := newTestConfig(upstream.URL+"/compatible-mode/v1", "http://img.invalid", "")
 	ts := newGateway(t, cfg)
 
 	resp, err := http.Post(ts.URL+"/v1/chat/completions", "application/json",

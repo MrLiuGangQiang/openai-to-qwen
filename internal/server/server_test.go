@@ -18,9 +18,8 @@ import (
 	"openai-to-qwen/internal/server"
 )
 
-func newTestConfig(textURL, imageURL, apiKey, exposed string) *config.Config {
+func newTestConfig(textURL, imageURL, exposed string) *config.Config {
 	return &config.Config{
-		QwenAPIKey:               apiKey,
 		QwenTextBaseURL:          textURL,
 		QwenImageBaseURL:         imageURL,
 		ExposedAPIKey:            exposed,
@@ -46,7 +45,7 @@ func newGateway(t *testing.T, cfg *config.Config) *httptest.Server {
 }
 
 func TestHealthz(t *testing.T) {
-	ts := newGateway(t, newTestConfig("http://text.invalid", "http://img.invalid", "sk-sp-test", ""))
+	ts := newGateway(t, newTestConfig("http://text.invalid", "http://img.invalid", ""))
 	resp, err := http.Get(ts.URL + "/healthz")
 	if err != nil {
 		t.Fatal(err)
@@ -71,11 +70,14 @@ func TestTextPassThrough(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	cfg := newTestConfig(upstream.URL+"/compatible-mode/v1", "http://img.invalid", "sk-sp-test", "")
+	cfg := newTestConfig(upstream.URL+"/compatible-mode/v1", "http://img.invalid", "")
 	ts := newGateway(t, cfg)
 
-	resp, err := http.Post(ts.URL+"/v1/chat/completions", "application/json",
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/chat/completions",
 		strings.NewReader(`{"model":"qwen3.8-max","messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer sk-client-key")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,8 +92,8 @@ func TestTextPassThrough(t *testing.T) {
 	if gotPath.Load() != "/compatible-mode/v1/chat/completions" {
 		t.Errorf("upstream path = %v, want /compatible-mode/v1/chat/completions", gotPath.Load())
 	}
-	if gotAuth.Load() != "Bearer sk-sp-test" {
-		t.Errorf("upstream auth = %v, want Bearer sk-sp-test", gotAuth.Load())
+	if gotAuth.Load() != "Bearer sk-client-key" {
+		t.Errorf("upstream auth = %v, want Bearer sk-client-key (passthrough)", gotAuth.Load())
 	}
 	if !strings.Contains(gotBody.Load().(string), "qwen3.8-max") {
 		t.Errorf("upstream body = %v", gotBody.Load())
@@ -104,8 +106,8 @@ func TestImagesGenerations(t *testing.T) {
 		if r.URL.Path != "/api/v1/services/aigc/multimodal-generation/generation" {
 			t.Errorf("upstream path = %s", r.URL.Path)
 		}
-		if got := r.Header.Get("Authorization"); got != "Bearer sk-sp-test" {
-			t.Errorf("auth = %q", got)
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-client-key" {
+			t.Errorf("auth = %q, want Bearer sk-client-key (passthrough)", got)
 		}
 		var m map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&m)
@@ -115,11 +117,14 @@ func TestImagesGenerations(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	cfg := newTestConfig("http://text.invalid", upstream.URL+"/api/v1/services/aigc/multimodal-generation/generation", "sk-sp-test", "")
+	cfg := newTestConfig("http://text.invalid", upstream.URL+"/api/v1/services/aigc/multimodal-generation/generation", "")
 	ts := newGateway(t, cfg)
 
-	resp, err := http.Post(ts.URL+"/v1/images/generations", "application/json",
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/images/generations",
 		strings.NewReader(`{"model":"dall-e-3","prompt":"a cat","n":1,"size":"1024x1024","response_format":"url"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer sk-client-key")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +187,7 @@ func TestImagesGenerationsB64(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	cfg := newTestConfig("http://text.invalid", upstream.URL+"/api/v1/services/aigc/multimodal-generation/generation", "sk-sp-test", "")
+	cfg := newTestConfig("http://text.invalid", upstream.URL+"/api/v1/services/aigc/multimodal-generation/generation", "")
 	ts := newGateway(t, cfg)
 
 	resp, err := http.Post(ts.URL+"/v1/images/generations", "application/json",
@@ -224,7 +229,7 @@ func TestImagesEdits(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	cfg := newTestConfig("http://text.invalid", upstream.URL+"/api/v1/services/aigc/multimodal-generation/generation", "sk-sp-test", "")
+	cfg := newTestConfig("http://text.invalid", upstream.URL+"/api/v1/services/aigc/multimodal-generation/generation", "")
 	ts := newGateway(t, cfg)
 
 	var buf bytes.Buffer
@@ -241,6 +246,7 @@ func TestImagesEdits(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/images/edits", &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer sk-client-key")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -276,7 +282,7 @@ func TestAuthRequired(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	cfg := newTestConfig(upstream.URL, "http://img.invalid", "sk-sp-test", "sk-exposed")
+	cfg := newTestConfig(upstream.URL, "http://img.invalid", "sk-exposed")
 	ts := newGateway(t, cfg)
 
 	// no key -> 401
@@ -318,7 +324,7 @@ func TestAuthRequired(t *testing.T) {
 }
 
 func TestImagesVariationsNotFound(t *testing.T) {
-	cfg := newTestConfig("http://text.invalid", "http://img.invalid", "sk-sp-test", "")
+	cfg := newTestConfig("http://text.invalid", "http://img.invalid", "")
 	ts := newGateway(t, cfg)
 	resp, err := http.Post(ts.URL+"/v1/images/variations", "application/json", strings.NewReader(`{}`))
 	if err != nil {

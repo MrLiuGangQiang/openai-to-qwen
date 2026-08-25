@@ -21,7 +21,7 @@ docker compose up -d
 from openai import OpenAI
 client = OpenAI(
     base_url="http://localhost:8080/v1",   # 缂冩垵鍙ч崷鏉挎絻
-    api_key="sk-my-exposed",               # EXPOSED_API_KEY
+    api_key="sk-sp-你的TokenPlanKey",      # 透传给 Qwen 的 Key（客户端自己带）
 )
 
 # 閺傚洦婀伴敍姘辨纯閹恒儵鈧繋绱?chat = client.chat.completions.create(

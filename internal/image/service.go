@@ -94,7 +94,10 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 		proxy.WriteJSONError(w, http.StatusInternalServerError, "build upstream request failed")
 		return
 	}
-	upstreamReq.Header.Set("Authorization", "Bearer "+s.cfg.QwenAPIKey)
+	// Key passthrough: forward the client's Authorization header unchanged.
+	if auth := r.Header.Get("Authorization"); auth != "" {
+		upstreamReq.Header.Set("Authorization", auth)
+	}
 	upstreamReq.Header.Set("Content-Type", "application/json")
 	upstreamReq.Header.Set("Accept", "application/json")
 	upstreamReq.Header.Set("User-Agent", "openai-to-qwen")

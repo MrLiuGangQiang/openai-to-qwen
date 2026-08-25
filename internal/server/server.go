@@ -27,7 +27,7 @@ type Server struct {
 func New(cfg *config.Config) (*Server, error) {
 	lg := logger.New(logger.Parse(cfg.LogLevel), os.Stdout)
 
-	textProxy, err := proxy.NewTextProxy(cfg.QwenTextBaseURL, cfg.QwenAPIKey, cfg.UpstreamTimeout, lg)
+	textProxy, err := proxy.NewTextProxy(cfg.QwenTextBaseURL, cfg.UpstreamTimeout, lg)
 	if err != nil {
 		return nil, err
 	}

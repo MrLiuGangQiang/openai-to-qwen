@@ -20,11 +20,12 @@ const (
 
 // Config holds all runtime settings, sourced from environment variables.
 type Config struct {
-	QwenAPIKey       string
 	QwenBaseURL      string
 	QwenTextBaseURL  string
 	QwenImageBaseURL string
 
+	// ExposedAPIKey is optional client-side authentication. When empty, the
+	// gateway is a pure format-conversion tool and performs no auth.
 	ExposedAPIKey string
 	ListenAddr    string
 
@@ -42,10 +43,6 @@ func Load() (*Config, error) {
 	cfg := &Config{ModelAliases: map[string]string{}}
 
 	cfg.QwenBaseURL = strings.TrimRight(getenv("QWEN_BASE_URL", defaultQwenBaseURL), "/")
-	cfg.QwenAPIKey = os.Getenv("QWEN_API_KEY")
-	if cfg.QwenAPIKey == "" {
-		return nil, fmt.Errorf("QWEN_API_KEY is required (Token Plan key, sk-sp- prefix)")
-	}
 	cfg.QwenTextBaseURL = strings.TrimRight(getenv("QWEN_TEXT_BASE_URL", cfg.QwenBaseURL+"/compatible-mode/v1"), "/")
 	cfg.QwenImageBaseURL = getenv("QWEN_IMAGE_BASE_URL", cfg.QwenBaseURL+"/api/v1/services/aigc/multimodal-generation/generation")
 	cfg.ExposedAPIKey = os.Getenv("EXPOSED_API_KEY")

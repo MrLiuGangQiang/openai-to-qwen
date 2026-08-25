@@ -49,7 +49,7 @@ func NewTransport(responseHeaderTimeout time.Duration) *http.Transport {
 // NewTextProxy builds a reverse proxy that forwards everything under
 // /v1 (except /v1/images/*, routed elsewhere) to the Token Plan
 // OpenAI-compatible endpoint, replacing the Authorization header.
-func NewTextProxy(textBaseURL, apiKey string, timeout time.Duration, lg *logger.Logger) (*httputil.ReverseProxy, error) {
+func NewTextProxy(textBaseURL string, timeout time.Duration, lg *logger.Logger) (*httputil.ReverseProxy, error) {
 	upstream, err := url.Parse(textBaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid QWEN_TEXT_BASE_URL: %w", err)
@@ -67,7 +67,8 @@ func NewTextProxy(textBaseURL, apiKey string, timeout time.Duration, lg *logger.
 			req.URL.Host = upstream.Host
 			req.URL.Path = upstream.Path + rel
 			req.Host = upstream.Host
-			req.Header.Set("Authorization", "Bearer "+apiKey)
+			// Key passthrough: the client's Authorization header is forwarded
+			// unchanged (ReverseProxy copies inbound headers automatically).
 			if infoEnabled {
 				*req = *req.WithContext(context.WithValue(req.Context(), reqStartKey{}, time.Now()))
 			}

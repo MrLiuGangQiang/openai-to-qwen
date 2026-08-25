@@ -1,4 +1,4 @@
-// Command server runs the OpenAI 鈫?Qwen Token Plan protocol gateway.
+// Command server runs the OpenAI 閳?Qwen Token Plan protocol gateway.
 package main
 
 import (
@@ -21,7 +21,7 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 	if cfg.ExposedAPIKey == "" {
-		log.Println("WARNING: EXPOSED_API_KEY is not set, authentication is disabled")
+		log.Println("no client auth (EXPOSED_API_KEY not set): pure format conversion, client keys are passed through")
 	}
 
 	srv, err := server.New(cfg)
