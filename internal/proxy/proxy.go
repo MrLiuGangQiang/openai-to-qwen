@@ -3,6 +3,7 @@
 package proxy
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,6 +17,10 @@ import (
 
 // ExposedPrefix is the API prefix this gateway serves.
 const ExposedPrefix = "/v1"
+
+// reqStartKey carries the upstream start time in the request context so
+// ModifyResponse / ErrorHandler can log the upstream round-trip duration.
+type reqStartKey struct{}
 
 // NewTransport returns a tuned, shared http.Transport for upstream calls.
 // responseHeaderTimeout <= 0 disables the response-header timeout, which is
@@ -57,11 +62,22 @@ func NewTextProxy(textBaseURL, apiKey string, timeout time.Duration, logger *log
 			req.URL.Path = upstream.Path + rel
 			req.Host = upstream.Host
 			req.Header.Set("Authorization", "Bearer "+apiKey)
+			*req = *req.WithContext(context.WithValue(req.Context(), reqStartKey{}, time.Now()))
 		},
 		Transport:     NewTransport(0), // no header timeout: streaming must not be cut off
 		FlushInterval: -1,              // immediate flush for SSE streaming
-		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
-			logger.Printf("text upstream error: %v", err)
+		ModifyResponse: func(resp *http.Response) error {
+			if start, ok := resp.Request.Context().Value(reqStartKey{}).(time.Time); ok {
+				logger.Printf("text upstream: %s %d %s", resp.Request.URL.Path, resp.StatusCode, time.Since(start))
+			}
+			return nil
+		},
+		ErrorHandler: func(w http.ResponseWriter, req *http.Request, err error) {
+			if start, ok := req.Context().Value(reqStartKey{}).(time.Time); ok {
+				logger.Printf("text upstream error: %s %s err=%v", req.URL.Path, time.Since(start), err)
+			} else {
+				logger.Printf("text upstream error: %s err=%v", req.URL.Path, err)
+			}
 			WriteJSONError(w, http.StatusBadGateway, "upstream request failed")
 		},
 		ErrorLog: logger,

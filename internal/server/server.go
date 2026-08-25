@@ -40,7 +40,7 @@ func New(cfg *config.Config) (*Server, error) {
 		cfg:       cfg,
 		logger:    logger,
 		textProxy: textProxy,
-		img:       image.NewService(cfg, imgClient),
+		img:       image.NewService(cfg, imgClient, logger),
 	}, nil
 }
 
