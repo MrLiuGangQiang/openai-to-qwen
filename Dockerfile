@@ -10,7 +10,7 @@ RUN go build -trimpath -ldflags="-s -w" -o /out/openai-to-qwen ./cmd/server
 
 # ---- runtime stage ----
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates \
+RUN apk add --no-cache ca-certificates curl \
     && adduser -D -u 10001 -h /home/app app
 USER app
 WORKDIR /home/app
