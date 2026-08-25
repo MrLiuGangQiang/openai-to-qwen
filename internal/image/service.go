@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"openai-to-qwen/internal/config"
+	"openai-to-qwen/internal/logger"
 	"openai-to-qwen/internal/proxy"
 )
 
@@ -19,55 +19,58 @@ type Service struct {
 	cfg        *config.Config
 	client     *http.Client
 	downloader *Downloader
-	logger     *log.Logger
+	log        *logger.Logger
 }
 
 // NewService builds the image service.
-func NewService(cfg *config.Config, client *http.Client, logger *log.Logger) *Service {
+func NewService(cfg *config.Config, client *http.Client, lg *logger.Logger) *Service {
 	return &Service{
 		cfg:        cfg,
 		client:     client,
 		downloader: NewDownloader(client, cfg.ImageMaxBytes),
-		logger:     logger,
+		log:        lg,
 	}
 }
 
 // HandleGenerations converts POST /v1/images/generations.
 func (s *Service) HandleGenerations(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
 	start := time.Now()
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBytes+1))
 	if err != nil {
-		s.logger.Printf("image generations: read body failed: %v", err)
+		s.log.Errorf("image generations: read body failed: %v", err)
 		proxy.WriteJSONError(w, http.StatusBadRequest, "read request body failed")
 		return
 	}
 	if len(body) > maxRequestBytes {
+		s.log.Errorf("image generations: request body too large (%d bytes)", len(body))
 		proxy.WriteJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
 		return
 	}
-	s.logger.Printf("image generations incoming path=%s body=%s", r.URL.Path, truncate(string(body), 4096))
+	s.log.Debugf("image generations incoming path=%s body=%s", r.URL.Path, truncate(string(body), 4096))
 
 	qreq, respFormat, err := ConvertGenerations(body, s.cfg.ModelAliases, s.cfg.QwenImageModel)
 	if err != nil {
-		s.logger.Printf("image generations: convert failed: %v", err)
+		s.log.Errorf("image generations: convert failed: %v", err)
 		proxy.WriteJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	s.logger.Printf("image generations: model=%s params=%v response_format=%q prompt_len=%d",
+	s.log.Infof("image generations: model=%s params=%v response_format=%q prompt_len=%d",
 		qreq.Model, qreq.Parameters, respFormat, promptLen(qreq))
 	s.forward(w, r, qreq, respFormat, start)
 }
 
 // HandleEdits converts POST /v1/images/edits (multipart).
 func (s *Service) HandleEdits(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
 	start := time.Now()
 	qreq, respFormat, err := ConvertEdits(r, s.cfg.ImageMaxBytes, s.cfg.ModelAliases, s.cfg.QwenImageModel)
 	if err != nil {
-		s.logger.Printf("image edits: convert failed: %v", err)
+		s.log.Errorf("image edits: convert failed: %v", err)
 		proxy.WriteJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	s.logger.Printf("image edits: model=%s images=%d params=%v response_format=%q",
+	s.log.Infof("image edits: model=%s images=%d params=%v response_format=%q",
 		qreq.Model, imageCount(qreq), qreq.Parameters, respFormat)
 	s.forward(w, r, qreq, respFormat, start)
 }
@@ -78,13 +81,16 @@ func (s *Service) HandleEdits(w http.ResponseWriter, r *http.Request) {
 func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequest, respFormat string, start time.Time) {
 	payload, err := json.Marshal(qreq)
 	if err != nil {
+		s.log.Errorf("image upstream: encode request failed: %v", err)
 		proxy.WriteJSONError(w, http.StatusInternalServerError, "encode upstream request failed")
 		return
 	}
-	s.logger.Printf("image upstream request url=%s model=%s body=%s", s.cfg.QwenImageBaseURL, qreq.Model, truncate(string(payload), 4096))
+	s.log.Infof("image upstream request url=%s model=%s", s.cfg.QwenImageBaseURL, qreq.Model)
+	s.log.Debugf("image upstream request body=%s", truncate(string(payload), 4096))
 
 	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, s.cfg.QwenImageBaseURL, bytes.NewReader(payload))
 	if err != nil {
+		s.log.Errorf("image upstream: build request failed: %v", err)
 		proxy.WriteJSONError(w, http.StatusInternalServerError, "build upstream request failed")
 		return
 	}
@@ -97,7 +103,7 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 	resp, err := s.client.Do(upstreamReq)
 	upstreamDur := time.Since(upstreamStart)
 	if err != nil {
-		s.logger.Printf("image upstream error: model=%s upstream=%s duration=%s err=%v",
+		s.log.Errorf("image upstream error: model=%s upstream=%s duration=%s err=%v",
 			qreq.Model, s.cfg.QwenImageBaseURL, upstreamDur, err)
 		proxy.WriteJSONError(w, http.StatusBadGateway, "upstream image request failed: "+err.Error())
 		return
@@ -106,7 +112,7 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
-		s.logger.Printf("image upstream non-2xx: model=%s status=%d duration=%s request_id=%s request=%s body=%s",
+		s.log.Errorf("image upstream non-2xx: model=%s status=%d duration=%s request_id=%s request=%s body=%s",
 			qreq.Model, resp.StatusCode, upstreamDur, resp.Header.Get("X-Request-Id"), truncate(string(payload), 2048), truncate(string(body), 2048))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
@@ -116,7 +122,7 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 
 	var qresp QwenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&qresp); err != nil {
-		s.logger.Printf("image upstream decode error: model=%s status=%d duration=%s err=%v",
+		s.log.Errorf("image upstream decode error: model=%s status=%d duration=%s err=%v",
 			qreq.Model, resp.StatusCode, upstreamDur, err)
 		proxy.WriteJSONError(w, http.StatusBadGateway, "decode upstream response failed: "+err.Error())
 		return
@@ -124,7 +130,7 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 
 	out, err := ConvertResponse(r.Context(), &qresp, respFormat, s.downloader, s.cfg.ImageDownloadConcurrency)
 	if err != nil {
-		s.logger.Printf("image response convert error: model=%s status=%d duration=%s err=%v",
+		s.log.Errorf("image response convert error: model=%s status=%d duration=%s err=%v",
 			qreq.Model, resp.StatusCode, upstreamDur, err)
 		proxy.WriteJSONError(w, http.StatusBadGateway, err.Error())
 		return
@@ -134,7 +140,7 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 	if len(out.Data) > 0 && out.Data[0].URL != "" {
 		firstURL = truncate(out.Data[0].URL, 200)
 	}
-	s.logger.Printf("image ok: model=%s status=%d upstream=%s total=%s images=%d request_id=%s first_url=%s",
+	s.log.Infof("image ok: model=%s status=%d upstream=%s total=%s images=%d request_id=%s first_url=%s",
 		qreq.Model, resp.StatusCode, upstreamDur, time.Since(start), len(out.Data), qresp.RequestID, firstURL)
 	w.Header().Set("Content-Type", "application/json")
 	if qresp.RequestID != "" {

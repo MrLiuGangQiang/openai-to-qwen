@@ -1,4 +1,4 @@
-// Command server runs the OpenAI → Qwen Token Plan protocol gateway.
+// Command server runs the OpenAI 鈫?Qwen Token Plan protocol gateway.
 package main
 
 import (
@@ -34,6 +34,10 @@ func main() {
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
+	}
+
+	if cfg.LogLevel == "off" {
+		log.Println("access/upstream logging disabled (LOG_LEVEL=off); set LOG_LEVEL=info or debug to enable")
 	}
 
 	go func() {

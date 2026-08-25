@@ -4,7 +4,6 @@ package server
 
 import (
 	"crypto/subtle"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -12,22 +11,23 @@ import (
 
 	"openai-to-qwen/internal/config"
 	"openai-to-qwen/internal/image"
+	"openai-to-qwen/internal/logger"
 	"openai-to-qwen/internal/proxy"
 )
 
 // Server is the gateway.
 type Server struct {
 	cfg       *config.Config
-	logger    *log.Logger
+	lg        *logger.Logger
 	textProxy http.Handler
 	img       *image.Service
 }
 
 // New builds the server from configuration.
 func New(cfg *config.Config) (*Server, error) {
-	logger := log.New(os.Stdout, "", log.LstdFlags)
+	lg := logger.New(logger.Parse(cfg.LogLevel), os.Stdout)
 
-	textProxy, err := proxy.NewTextProxy(cfg.QwenTextBaseURL, cfg.QwenAPIKey, cfg.UpstreamTimeout, logger)
+	textProxy, err := proxy.NewTextProxy(cfg.QwenTextBaseURL, cfg.QwenAPIKey, cfg.UpstreamTimeout, lg)
 	if err != nil {
 		return nil, err
 	}
@@ -38,19 +38,26 @@ func New(cfg *config.Config) (*Server, error) {
 	}
 	return &Server{
 		cfg:       cfg,
-		logger:    logger,
+		lg:        lg,
 		textProxy: textProxy,
-		img:       image.NewService(cfg, imgClient, logger),
+		img:       image.NewService(cfg, imgClient, lg),
 	}, nil
 }
 
-// Handler returns the root HTTP handler.
+// Handler returns the root HTTP handler. When info logging is disabled the
+// access-log middleware is not installed at all, so the hot path stays lean.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("/v1/images/", s.handleImages)
 	mux.Handle("/", s.textProxy)
-	return s.recoverMiddleware(s.loggingMiddleware(s.authMiddleware(mux)))
+
+	var h http.Handler = mux
+	if s.lg.Enabled(logger.LevelInfo) {
+		h = s.loggingMiddleware(h)
+	}
+	h = s.authMiddleware(h)
+	return s.recoverMiddleware(h)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -93,7 +100,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			provided = k
 		}
 		if subtle.ConstantTimeCompare([]byte(provided), expected) != 1 {
-			s.logger.Printf("auth reject path=%s remote=%s", r.URL.Path, r.RemoteAddr)
+			s.lg.Errorf("auth reject path=%s remote=%s", r.URL.Path, r.RemoteAddr)
 			proxy.WriteJSONError(w, http.StatusUnauthorized, "invalid API key")
 			return
 		}
@@ -130,7 +137,7 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		s.logger.Printf("req method=%s path=%s query=%q remote=%s ua=%q status=%d duration=%s bytes_in=%d",
+		s.lg.Infof("req method=%s path=%s query=%q remote=%s ua=%q status=%d duration=%s bytes_in=%d",
 			r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.UserAgent(), rec.status, time.Since(start), r.ContentLength)
 	})
 }
@@ -139,7 +146,7 @@ func (s *Server) recoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				s.logger.Printf("panic: %v", rec)
+				s.lg.Errorf("panic: %v", rec)
 				proxy.WriteJSONError(w, http.StatusInternalServerError, "internal error")
 			}
 		}()

@@ -6,13 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
 	"time"
+
+	"openai-to-qwen/internal/logger"
 )
 
 // ExposedPrefix is the API prefix this gateway serves.
@@ -20,11 +21,13 @@ const ExposedPrefix = "/v1"
 
 // reqStartKey carries the upstream start time in the request context so
 // ModifyResponse / ErrorHandler can log the upstream round-trip duration.
+// The context is only allocated when info logging is enabled.
 type reqStartKey struct{}
 
 // NewTransport returns a tuned, shared http.Transport for upstream calls.
 // responseHeaderTimeout <= 0 disables the response-header timeout, which is
 // recommended for streaming endpoints where the first byte may be slow.
+// DisableCompression avoids gzip encode/decode CPU on small JSON/SSE payloads.
 func NewTransport(responseHeaderTimeout time.Duration) *http.Transport {
 	return &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -39,13 +42,14 @@ func NewTransport(responseHeaderTimeout time.Duration) *http.Transport {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		ResponseHeaderTimeout: responseHeaderTimeout,
+		DisableCompression:    true,
 	}
 }
 
 // NewTextProxy builds a reverse proxy that forwards everything under
 // /v1 (except /v1/images/*, routed elsewhere) to the Token Plan
 // OpenAI-compatible endpoint, replacing the Authorization header.
-func NewTextProxy(textBaseURL, apiKey string, timeout time.Duration, logger *log.Logger) (*httputil.ReverseProxy, error) {
+func NewTextProxy(textBaseURL, apiKey string, timeout time.Duration, lg *logger.Logger) (*httputil.ReverseProxy, error) {
 	upstream, err := url.Parse(textBaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid QWEN_TEXT_BASE_URL: %w", err)
@@ -53,6 +57,8 @@ func NewTextProxy(textBaseURL, apiKey string, timeout time.Duration, logger *log
 	if upstream.Scheme != "http" && upstream.Scheme != "https" {
 		return nil, fmt.Errorf("invalid QWEN_TEXT_BASE_URL scheme %q", upstream.Scheme)
 	}
+
+	infoEnabled := lg.Enabled(logger.LevelInfo)
 
 	rp := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
@@ -62,26 +68,26 @@ func NewTextProxy(textBaseURL, apiKey string, timeout time.Duration, logger *log
 			req.URL.Path = upstream.Path + rel
 			req.Host = upstream.Host
 			req.Header.Set("Authorization", "Bearer "+apiKey)
-			*req = *req.WithContext(context.WithValue(req.Context(), reqStartKey{}, time.Now()))
+			if infoEnabled {
+				*req = *req.WithContext(context.WithValue(req.Context(), reqStartKey{}, time.Now()))
+			}
 		},
 		Transport:     NewTransport(0), // no header timeout: streaming must not be cut off
 		FlushInterval: -1,              // immediate flush for SSE streaming
 		ModifyResponse: func(resp *http.Response) error {
-			if start, ok := resp.Request.Context().Value(reqStartKey{}).(time.Time); ok {
-				logger.Printf("text upstream url=%s status=%d duration=%s content_type=%s",
-					resp.Request.URL.String(), resp.StatusCode, time.Since(start), resp.Header.Get("Content-Type"))
+			if infoEnabled {
+				if start, ok := resp.Request.Context().Value(reqStartKey{}).(time.Time); ok {
+					lg.Infof("text upstream url=%s status=%d duration=%s content_type=%s",
+						resp.Request.URL.String(), resp.StatusCode, time.Since(start), resp.Header.Get("Content-Type"))
+				}
 			}
 			return nil
 		},
 		ErrorHandler: func(w http.ResponseWriter, req *http.Request, err error) {
-			if start, ok := req.Context().Value(reqStartKey{}).(time.Time); ok {
-				logger.Printf("text upstream error: %s %s err=%v", req.URL.Path, time.Since(start), err)
-			} else {
-				logger.Printf("text upstream error: %s err=%v", req.URL.Path, err)
-			}
+			lg.Errorf("text upstream error: %s err=%v", req.URL.Path, err)
 			WriteJSONError(w, http.StatusBadGateway, "upstream request failed")
 		},
-		ErrorLog: logger,
+		ErrorLog: lg.StdLogger(logger.LevelError),
 	}
 	return rp, nil
 }

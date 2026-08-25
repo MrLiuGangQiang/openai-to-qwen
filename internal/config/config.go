@@ -15,7 +15,7 @@ const (
 	defaultImageConcurrency = 4
 	defaultImageMaxBytes    = 20 << 20          // 20 MiB
 	defaultUpstreamTimeout  = 300 * time.Second // image generation can take 60s+, be generous
-	defaultLogLevel         = "info"
+	defaultLogLevel         = "off"             // logging off by default for maximum performance
 )
 
 // Config holds all runtime settings, sourced from environment variables.

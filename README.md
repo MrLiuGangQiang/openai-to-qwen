@@ -131,6 +131,8 @@ internal/image/      OpenAI閳摪wen 閸ユ儳鍎氶崡蹇氼唴鏉烆剚宕�
 3. **鏈?Docker 鏃?*锛歚docker build -t registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen:v1.0.0 . && docker push ...`
 ## 日志说明（排查用）
 
+> **默认 `LOG_LEVEL=off` 全关**（性能最优）。排查问题时设置 `LOG_LEVEL=info`（请求/上游日志）或 `LOG_LEVEL=debug`（额外打印请求体）。
+
 网关日志分三类，`docker logs openai-to-qwen` 里按时间看：
 
 **1. 访问日志（每个请求）**
