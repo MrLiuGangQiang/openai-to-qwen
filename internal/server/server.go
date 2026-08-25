@@ -93,6 +93,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			provided = k
 		}
 		if subtle.ConstantTimeCompare([]byte(provided), expected) != 1 {
+			s.logger.Printf("auth reject path=%s remote=%s", r.URL.Path, r.RemoteAddr)
 			proxy.WriteJSONError(w, http.StatusUnauthorized, "invalid API key")
 			return
 		}
@@ -123,14 +124,14 @@ func (r *statusRecorder) Unwrap() http.ResponseWriter {
 	return r.ResponseWriter
 }
 
-// loggingMiddleware emits a single access log line per request. Bodies are
-// never logged.
+// loggingMiddleware emits a detailed access log line per request.
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		s.logger.Printf("%s %s %d %s", r.Method, r.URL.Path, rec.status, time.Since(start))
+		s.logger.Printf("req method=%s path=%s query=%q remote=%s ua=%q status=%d duration=%s bytes_in=%d",
+			r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.UserAgent(), rec.status, time.Since(start), r.ContentLength)
 	})
 }
 

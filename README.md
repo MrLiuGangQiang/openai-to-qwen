@@ -129,3 +129,32 @@ internal/image/      OpenAI閳摪wen 閸ユ儳鍎氶崡蹇氼唴鏉烆剚宕�
    # 鏈湴楠岃瘉锛堜笉鎺ㄩ€侊級锛歡o run ./tools/release -tarball out.tar / -extract dir
    ```
 3. **鏈?Docker 鏃?*锛歚docker build -t registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen:v1.0.0 . && docker push ...`
+## 日志说明（排查用）
+
+网关日志分三类，`docker logs openai-to-qwen` 里按时间看：
+
+**1. 访问日志（每个请求）**
+```
+req method=POST path=/v1/images/generations query="" remote=1.2.3.4:5678 ua=curl status=200 duration=69.6s bytes_in=42
+```
+
+**2. 图像路径（转换 + 上游）**
+```
+image generations incoming path=/v1/images/generations body={"model":"qwen-image-3.0-pro",...}   ← 客户端发来的原始请求
+image generations: model=qwen-image-3.0-pro params=map[] response_format="" prompt_len=4
+image upstream request url=https://token-plan.../generation model=qwen-image-3.0-pro body={...}    ← 实际转发给 Token Plan 的请求
+image ok: model=qwen-image-3.0-pro status=200 upstream=69.5s total=69.6s images=1 request_id=xxx first_url=https://...
+image upstream non-2xx: model=... status=400 duration=0.3s request_id=xxx request={...} body={...}   ← 上游报错时，转发的请求和错误体都会打出来
+image upstream error: model=... duration=180s err=context deadline exceeded                          ← 上游挂起超时
+```
+
+**3. 文本路径（透传）**
+```
+text upstream url=https://token-plan.../chat/completions status=200 duration=1.2s content_type=application/json
+```
+
+**排查口诀**：
+- 有 `req` 行但没 `image generations incoming` / `text upstream` → 请求没进转换/转发逻辑（路径不对，比如少了 /v1）
+- 有 `image upstream request` 但没有后续 `image ok` / `non-2xx` / `error` → 请求发出去后上游挂起，等超时
+- `image upstream non-2xx` 里的 `body=` 就是上游真实报错（如 Unsupported model）
+- 完全没有 `req` 行 → 请求根本没到网关（被前面 nginx/ingress 拦了）

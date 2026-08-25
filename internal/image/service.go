@@ -45,6 +45,7 @@ func (s *Service) HandleGenerations(w http.ResponseWriter, r *http.Request) {
 		proxy.WriteJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
 		return
 	}
+	s.logger.Printf("image generations incoming path=%s body=%s", r.URL.Path, truncate(string(body), 4096))
 
 	qreq, respFormat, err := ConvertGenerations(body, s.cfg.ModelAliases, s.cfg.QwenImageModel)
 	if err != nil {
@@ -80,6 +81,7 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 		proxy.WriteJSONError(w, http.StatusInternalServerError, "encode upstream request failed")
 		return
 	}
+	s.logger.Printf("image upstream request url=%s model=%s body=%s", s.cfg.QwenImageBaseURL, qreq.Model, truncate(string(payload), 4096))
 
 	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, s.cfg.QwenImageBaseURL, bytes.NewReader(payload))
 	if err != nil {
@@ -128,8 +130,12 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 		return
 	}
 
-	s.logger.Printf("image ok: model=%s status=%d upstream=%s total=%s images=%d request_id=%s",
-		qreq.Model, resp.StatusCode, upstreamDur, time.Since(start), len(out.Data), qresp.RequestID)
+	firstURL := "-"
+	if len(out.Data) > 0 && out.Data[0].URL != "" {
+		firstURL = truncate(out.Data[0].URL, 200)
+	}
+	s.logger.Printf("image ok: model=%s status=%d upstream=%s total=%s images=%d request_id=%s first_url=%s",
+		qreq.Model, resp.StatusCode, upstreamDur, time.Since(start), len(out.Data), qresp.RequestID, firstURL)
 	w.Header().Set("Content-Type", "application/json")
 	if qresp.RequestID != "" {
 		w.Header().Set("X-Request-Id", qresp.RequestID)

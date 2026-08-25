@@ -68,7 +68,8 @@ func NewTextProxy(textBaseURL, apiKey string, timeout time.Duration, logger *log
 		FlushInterval: -1,              // immediate flush for SSE streaming
 		ModifyResponse: func(resp *http.Response) error {
 			if start, ok := resp.Request.Context().Value(reqStartKey{}).(time.Time); ok {
-				logger.Printf("text upstream: %s %d %s", resp.Request.URL.Path, resp.StatusCode, time.Since(start))
+				logger.Printf("text upstream url=%s status=%d duration=%s content_type=%s",
+					resp.Request.URL.String(), resp.StatusCode, time.Since(start), resp.Header.Get("Content-Type"))
 			}
 			return nil
 		},
