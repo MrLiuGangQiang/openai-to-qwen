@@ -104,8 +104,8 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
-		s.logger.Printf("image upstream non-2xx: model=%s status=%d duration=%s request_id=%s body=%s",
-			qreq.Model, resp.StatusCode, upstreamDur, resp.Header.Get("X-Request-Id"), string(body))
+		s.logger.Printf("image upstream non-2xx: model=%s status=%d duration=%s request_id=%s request=%s body=%s",
+			qreq.Model, resp.StatusCode, upstreamDur, resp.Header.Get("X-Request-Id"), truncate(string(payload), 2048), truncate(string(body), 2048))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(body)
@@ -161,4 +161,11 @@ func imageCount(q *QwenRequest) int {
 		}
 	}
 	return n
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "...(truncated)"
 }
