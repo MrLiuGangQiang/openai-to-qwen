@@ -111,7 +111,7 @@
 
 | OpenAI 字段 | 值示例 | 转换规则 | Qwen 字段 |
 |---|---|---|---|
-| `model` | `gpt-image-1` / `dall-e-3` / `qwen-image-2.0` | 模型名映射（见 §5）：OpenAI 名 → 配置的默认模型；`qwen-image-*`/`wan*-image`/`z-image-*` 原样透传 | `model` |
+| `model` | `qwen-image-2.0` / `wan2.7-image` 等 | 请求的 model **原样透传**；`MODEL_ALIAS_<name>` 可选别名优先；未带 model 时兜底 `QWEN_IMAGE_MODEL` | `model` |
 | `prompt` | `"a cat"` | 直接映射 | `input.messages[0].content[0].text` |
 | `n` | `2` | 直接映射，钳制到 1~6 | `parameters.n` |
 | `size` | `1024x1024` | **`x` → `*`**；非法/超出范围回退默认 | `parameters.size` |
@@ -158,11 +158,11 @@
 
 ## 5. 模型名映射策略
 
-| OpenAI 侧模型名（客户端传入） | 转发到 Qwen 的模型 |
+| 情况 | 转发到 Qwen 的模型 |
 |---|---|
-| `qwen-image-2.0`、`qwen-image-2.0-pro`、`wan2.7-image`、`wan2.7-image-pro`、`z-image-turbo` 等 Qwen 系 | **原样透传** |
-| `dall-e-2` / `dall-e-3` / `gpt-image-1` / `gpt-image-1.1` / 其他未知 | 统一映射为 `QWEN_IMAGE_MODEL`（默认 `qwen-image-2.0`） |
-| 任意模型名 | 支持环境变量细粒度别名：`MODEL_ALIAS_<原名>=<qwen模型>`（例如 `MODEL_ALIAS_gpt-image-1=qwen-image-2.0-pro`），优先级：精确别名 > Qwen 系透传 > 默认兜底 |
+| 请求带了 model（任意名字） | **原样透传**（客户端需传真实 Qwen 图像模型名，如 `qwen-image-2.0`、`wan2.7-image`） |
+| 配置了 `MODEL_ALIAS_<原名>` | 别名优先（可选，如 `MODEL_ALIAS_gpt-image-1=qwen-image-2.0-pro`） |
+| 请求未带 model | 兜底 `QWEN_IMAGE_MODEL`（默认 `qwen-image-2.0`） |
 
 文本路径不做任何模型改写（纯透传）。
 
@@ -225,7 +225,7 @@
 | `QWEN_IMAGE_BASE_URL` | — | `{QWEN_BASE_URL}/api/v1/services/aigc/multimodal-generation/generation` | 图像转换目标 |
 | `EXPOSED_API_KEY` | — | 空（不鉴权） | 对外暴露的 Key，客户端必须携带 |
 | `LISTEN_ADDR` | — | `:8080` | 监听地址 |
-| `QWEN_IMAGE_MODEL` | — | `qwen-image-2.0` | 图像模型兜底/映射目标 |
+| `QWEN_IMAGE_MODEL` | — | `qwen-image-2.0` | 请求未带 model 时的兜底图像模型 |
 | `MODEL_ALIAS_<name>` | — | 无 | 细粒度模型别名映射 |
 | `IMAGE_DOWNLOAD_CONCURRENCY` | — | `4` | b64_json 模式并发下载数 |
 | `IMAGE_MAX_BYTES` | — | `20971520` (20MB) | 单张图片下载上限 |
@@ -330,5 +330,6 @@ api_key  = <EXPOSED_API_KEY>
 2. ~~`/v1/models` 本地合成列表 vs 纯透传？~~ **已确认：纯透传**，不做本地合成
 3. **已确认：图像响应把 Qwen `request_id` 透出到 `X-Request-Id` 响应头**
 4. ~~`images/variations` 是否纳入？~~ **已确认：不纳入**，`/v1/images/variations` 返回 404
+
 
 

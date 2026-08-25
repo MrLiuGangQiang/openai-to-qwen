@@ -82,6 +82,30 @@ func TestConvertGenerationsQwenModelPassthrough(t *testing.T) {
 	}
 }
 
+func TestConvertGenerationsUsesRequestModel(t *testing.T) {
+	// The model from the request is passed through as-is, no mapping/fallback.
+	body := []byte(`{"model":"wan2.7-image","prompt":"a cat"}`)
+	q, _, err := ConvertGenerations(body, nil, "qwen-image-2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Model != "wan2.7-image" {
+		t.Errorf("model = %q, want wan2.7-image (request model as-is)", q.Model)
+	}
+}
+
+func TestConvertGenerationsFallbackWhenNoModel(t *testing.T) {
+	// Empty model falls back to the configured default.
+	body := []byte(`{"prompt":"a cat"}`)
+	q, _, err := ConvertGenerations(body, nil, "qwen-image-2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Model != "qwen-image-2.0" {
+		t.Errorf("model = %q, want qwen-image-2.0 (fallback)", q.Model)
+	}
+}
+
 func TestConvertGenerationsMissingPrompt(t *testing.T) {
 	if _, _, err := ConvertGenerations([]byte(`{"model":"dall-e-3"}`), nil, "qwen-image-2.0"); err == nil {
 		t.Error("expected error for missing prompt")

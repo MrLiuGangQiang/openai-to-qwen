@@ -1,30 +1,17 @@
-// Package modelmap resolves OpenAI-side model names to Qwen image models.
+// Package modelmap resolves the upstream image model for a request.
 package modelmap
 
-import "strings"
-
-// ResolveImageModel maps an incoming model name to a Qwen image model.
-// Precedence: explicit alias > Qwen-native model (pass through) > default fallback.
+// ResolveImageModel returns the Qwen image model to call for an incoming
+// request. The model name from the request is used as-is (no mapping), so the
+// client is expected to send a real Qwen image model name (e.g. qwen-image-2.0,
+// wan2.7-image). An explicit alias (MODEL_ALIAS_<name>) still takes precedence
+// when configured; fallback is only used when the request carries no model.
 func ResolveImageModel(name string, aliases map[string]string, fallback string) string {
-	if name == "" {
-		return fallback
-	}
-	if m, ok := aliases[name]; ok && m != "" {
-		return m
-	}
-	if IsQwenImageModel(name) {
+	if name != "" {
+		if m, ok := aliases[name]; ok && m != "" {
+			return m
+		}
 		return name
 	}
 	return fallback
-}
-
-// IsQwenImageModel reports whether the model name belongs to Qwen's native
-// multimodal-generation families and should be passed through unchanged.
-func IsQwenImageModel(name string) bool {
-	for _, p := range []string{"qwen-image", "wan", "z-image"} {
-		if strings.HasPrefix(name, p) {
-			return true
-		}
-	}
-	return false
 }

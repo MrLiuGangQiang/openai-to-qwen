@@ -136,8 +136,8 @@ func TestImagesGenerations(t *testing.T) {
 	if m == nil {
 		t.Fatal("upstream request not captured")
 	}
-	if m["model"] != "qwen-image-2.0" {
-		t.Errorf("model = %v, want qwen-image-2.0 (fallback)", m["model"])
+	if m["model"] != "dall-e-3" {
+		t.Errorf("model = %v, want dall-e-3 (request model as-is)", m["model"])
 	}
 	in := m["input"].(map[string]any)
 	msgs := in["messages"].([]any)
