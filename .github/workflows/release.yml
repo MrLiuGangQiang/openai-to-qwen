@@ -1,6 +1,6 @@
 name: release
 
-# Build and push the image to Aliyun ACR when a v* tag is pushed.
+# Build and push the image to Aliyun ACR.
 # Repository secrets required:
 #   ACR_USERNAME
 #   ACR_PASSWORD
@@ -9,6 +9,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Image tag to push (default v1.0.0)"
+        required: false
+        default: "v1.0.0"
 
 jobs:
   build-and-push:
@@ -32,6 +37,10 @@ jobs:
         with:
           context: .
           push: true
+          # ACR personal edition rejects BuildKit attestation manifests
+          # (config media type application/vnd.oci.empty.v1+json).
+          provenance: false
+          sbom: false
           tags: |
-            registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen:${{ github.ref_name }}
+            registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen:${{ github.event_name == 'push' && github.ref_name || inputs.version }}
             registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen:latest
