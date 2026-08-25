@@ -13,8 +13,8 @@ const (
 	defaultListenAddr       = ":8080"
 	defaultQwenImageModel   = "qwen-image-2.0"
 	defaultImageConcurrency = 4
-	defaultImageMaxBytes    = 20 << 20 // 20 MiB
-	defaultUpstreamTimeout  = 180 * time.Second
+	defaultImageMaxBytes    = 20 << 20          // 20 MiB
+	defaultUpstreamTimeout  = 300 * time.Second // image generation can take 60s+, be generous
 	defaultLogLevel         = "info"
 )
 

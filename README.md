@@ -1,142 +1,131 @@
-# OpenAI 鈫?Qwen Token Plan 鍗忚杞崲缃戝叧
-
-楂樻€ц兘鍙嶅悜浠ｇ悊锛氬澶栨毚闇?**OpenAI 鍏煎鍗忚**锛屾妸璇锋眰杞彂鍒?Qwen Token Plan锛涙枃鏈ā鍨?*绾瓧鑺傜骇閫忎紶**锛屽浘鍍忔ā鍨嬶紙Qwen 鑷畾涔?`multimodal-generation` 鍗忚锛夊仛**璇锋眰/鍝嶅簲鍙屽悜杞崲**銆傛棤鐘舵€併€佷笉钀藉簱銆佸彧鍋氳浆鎹€?
-## 鐗规€?
-- **鏂囨湰閫忎紶**锛歚/v1/chat/completions`銆乣/v1/responses`銆乣/v1/embeddings`銆乣/v1/models` 鍙婃墍鏈?`/v1/*` 闈炲浘鍍忚矾寰勶紝闆?JSON 瑙ｆ瀽锛屽瓧鑺傜骇鍙嶅悜浠ｇ悊锛孲SE 娴佸紡鍗虫椂杞彂锛坄FlushInterval=-1`锛夈€?- **鍥惧儚杞崲**锛堥噸鐐癸級锛歚/v1/images/generations`锛堟枃鐢熷浘锛夈€乣/v1/images/edits`锛堝浘鐢熷浘 multipart锛夆啋 Qwen `multimodal-generation`锛涘搷搴斿弽鍚戞槧灏勪负 OpenAI 鏍煎紡锛屾敮鎸?`url` / `b64_json`銆?- **鏋佽嚧鎬ц兘**锛氳浆鎹㈢函鍑芥暟 + `sync.Pool` 澶嶇敤锛沗url` 妯″紡闆朵笅杞斤紱`b64_json` 妯″紡鏈夌晫骞跺彂涓嬭浇锛堥粯璁?4锛屽崟寮犱笂闄?20MB锛夛紱鍏ㄥ眬杩炴帴姹?+ HTTP/2銆?  - 瀹炴祴锛坕5-1135G7锛夛細鏂囩敓鍥捐姹傝浆鎹?~1.5碌s/op锛屽搷搴旀槧灏?~89ns/op銆?- **鐜鍙橀噺閰嶇疆**锛歈wen Base URL / Qwen Key / 瀵瑰 Key 鍏ㄩ儴璧扮幆澧冨彉閲忥紝`.env.example` 鎻愪緵妯℃澘銆?- **Docker 閮ㄧ讲**锛氬闃舵鏋勫缓銆侀潪 root 杩愯銆丠EALTHCHECK銆乨ocker-compose 涓€閿惎鍔ㄣ€?
-## 蹇€熷紑濮?
-### 鏈湴杩愯
+# OpenAI 閳?Qwen Token Plan 閸楀繗顔呮潪顒佸床缂冩垵鍙?
+妤傛ɑ鈧嗗厴閸欏秴鎮滄禒锝囨倞閿涙艾顕径鏍ㄦ瘹闂?**OpenAI 閸忕厧顔愰崡蹇氼唴**閿涘本濡哥拠閿嬬湴鏉烆剙褰傞崚?Qwen Token Plan閿涙稒鏋冮張顒伳侀崹?*缁绢垰鐡ч懞鍌滈獓闁繋绱?*閿涘苯娴橀崓蹇斈侀崹瀣剁礄Qwen 閼奉亜鐣炬稊?`multimodal-generation` 閸楀繗顔呴敍澶婁粵**鐠囬攱鐪?閸濆秴绨查崣灞芥倻鏉烆剚宕?*閵嗗倹妫ら悩鑸碘偓浣碘偓浣风瑝閽€钘夌氨閵嗕礁褰ч崑姘虫祮閹诡潿鈧?
+## 閻楄鈧?
+- **閺傚洦婀伴柅蹇庣炊**閿涙瓪/v1/chat/completions`閵嗕梗/v1/responses`閵嗕梗/v1/embeddings`閵嗕梗/v1/models` 閸欏﹥澧嶉張?`/v1/*` 闂堢偛娴橀崓蹇氱熅瀵板嫸绱濋梿?JSON 鐟欙絾鐎介敍灞界摟閼哄倻楠囬崣宥呮倻娴狅絿鎮婇敍瀛睸E 濞翠礁绱￠崡铏鏉烆剙褰傞敍鍧凢lushInterval=-1`閿涘鈧?- **閸ユ儳鍎氭潪顒佸床**閿涘牓鍣搁悙鐧哥礆閿涙瓪/v1/images/generations`閿涘牊鏋冮悽鐔锋禈閿涘鈧梗/v1/images/edits`閿涘牆娴橀悽鐔锋禈 multipart閿涘鍟?Qwen `multimodal-generation`閿涙稑鎼锋惔鏂垮冀閸氭垶妲х亸鍕礋 OpenAI 閺嶇厧绱￠敍灞炬暜閹?`url` / `b64_json`閵?- **閺嬩浇鍤ч幀褑鍏?*閿涙俺娴嗛幑銏㈠嚱閸戣姤鏆?+ `sync.Pool` 婢跺秶鏁ら敍娌梪rl` 濡€崇础闂嗘湹绗呮潪鏂ょ幢`b64_json` 濡€崇础閺堝鏅獮璺哄絺娑撳娴囬敍鍫ョ帛鐠?4閿涘苯宕熷鐘辩瑐闂?20MB閿涘绱遍崗銊ョ湰鏉╃偞甯村Ч?+ HTTP/2閵?  - 鐎圭偞绁撮敍鍧?-1135G7閿涘绱伴弬鍥╂晸閸ユ崘顕Ч鍌濇祮閹?~1.5纰宻/op閿涘苯鎼锋惔鏃€妲х亸?~89ns/op閵?- **閻滎垰顣ㄩ崣姗€鍣洪柊宥囩枂**閿涙瓐wen Base URL / Qwen Key / 鐎电懓顦?Key 閸忋劑鍎寸挧鎵箚婢у啫褰夐柌蹇ョ礉`.env.example` 閹绘劒绶靛Ο鈩冩緲閵?- **Docker 闁劎璁?*閿涙艾顦块梼鑸殿唽閺嬪嫬缂撻妴渚€娼?root 鏉╂劘顢戦妴涓燛ALTHCHECK閵嗕龚ocker-compose 娑撯偓闁款喖鎯庨崝銊ｂ偓?
+## 韫囶偊鈧喎绱戞慨?
+### 閺堫剙婀存潻鎰攽
 
 ```bash
-export QWEN_API_KEY=sk-sp-xxxx            # Token Plan 涓撳睘 Key
-export EXPOSED_API_KEY=sk-my-exposed     # 瀵瑰鏆撮湶鐨?Key锛堝彲閫夛紝鐣欑┖鍒欎笉閴存潈锛?go run ./cmd/server
+export QWEN_API_KEY=sk-sp-xxxx            # Token Plan 娑撴挸鐫?Key
+export EXPOSED_API_KEY=sk-my-exposed     # 鐎电懓顦婚弳鎾苟閻?Key閿涘牆褰查柅澶涚礉閻ｆ瑧鈹栭崚娆庣瑝闁村瓨娼堥敍?go run ./cmd/server
 ```
 
-### Docker 閮ㄧ讲
-
+### Docker 闁劎璁?
 ```bash
-cp .env.example .env                     # 濉叆 QWEN_API_KEY / EXPOSED_API_KEY
+cp .env.example .env                     # 婵夘偄鍙?QWEN_API_KEY / EXPOSED_API_KEY
 docker compose up -d
 ```
 
-### 瀹㈡埛绔帴鍏ワ紙鎶婄綉鍏冲綋浣?OpenAI 浣跨敤锛?
+### 鐎广垺鍩涚粩顖涘复閸忋儻绱欓幎濠勭秹閸忓啿缍嬫担?OpenAI 娴ｈ法鏁ら敍?
 ```python
 from openai import OpenAI
 client = OpenAI(
-    base_url="http://localhost:8080/v1",   # 缃戝叧鍦板潃
+    base_url="http://localhost:8080/v1",   # 缂冩垵鍙ч崷鏉挎絻
     api_key="sk-my-exposed",               # EXPOSED_API_KEY
 )
 
-# 鏂囨湰锛氱洿鎺ラ€忎紶
-chat = client.chat.completions.create(
+# 閺傚洦婀伴敍姘辨纯閹恒儵鈧繋绱?chat = client.chat.completions.create(
     model="qwen3.8-max",
-    messages=[{"role": "user", "content": "浣犲ソ"}],
+    messages=[{"role": "user", "content": "娴ｇ姴銈?}],
 )
 
-# 鍥惧儚锛歄penAI 鏂囩敓鍥?鈫?Qwen multimodal-generation
+# 閸ユ儳鍎氶敍姝刾enAI 閺傚洨鏁撻崶?閳?Qwen multimodal-generation
 img = client.images.generate(
-    model="gpt-image-1",          # 浼氳鏄犲皠涓?QWEN_IMAGE_MODEL锛堥粯璁?qwen-image-2.0锛?    prompt="a cat on the moon",
+    model="gpt-image-1",          # 娴兼俺顫﹂弰鐘茬殸娑?QWEN_IMAGE_MODEL閿涘牓绮拋?qwen-image-2.0閿?    prompt="a cat on the moon",
     size="1024x1024",
     n=1,
-    response_format="url",        # 鎴?"b64_json"
+    response_format="url",        # 閹?"b64_json"
 )
 ```
 
 ```bash
-# curl 鏂囩敓鍥?curl http://localhost:8080/v1/images/generations \
+# curl 閺傚洨鏁撻崶?curl http://localhost:8080/v1/images/generations \
   -H "Authorization: Bearer sk-my-exposed" \
   -H "Content-Type: application/json" \
   -d '{"model":"dall-e-3","prompt":"a cat","size":"1024x1024"}'
 ```
 
-## 鎺ュ彛鍒楄〃
-
-| 鏂规硶 | 璺緞 | 琛屼负 |
+## 閹恒儱褰涢崚妤勩€?
+| 閺傝纭?| 鐠侯垰绶?| 鐞涘奔璐?|
 |---|---|---|
-| POST | `/v1/chat/completions` | 鏂囨湰閫忎紶锛堝惈 SSE锛?|
-| POST | `/v1/responses` | 鏂囨湰閫忎紶 |
-| POST | `/v1/embeddings` | 鏂囨湰閫忎紶 |
-| GET | `/v1/models` | 鏂囨湰閫忎紶 |
-| POST | `/v1/images/generations` | **杞崲**锛氭枃鐢熷浘 |
-| POST | `/v1/images/edits` | **杞崲**锛氬浘鐢熷浘锛坢ultipart锛?|
-| GET | `/healthz` | 鍋ュ悍妫€鏌ワ紙鍏嶉壌鏉冿級 |
-| * | `/v1/*` 鍏朵粬 | 鏂囨湰閫忎紶鍏滃簳 |
+| POST | `/v1/chat/completions` | 閺傚洦婀伴柅蹇庣炊閿涘牆鎯?SSE閿?|
+| POST | `/v1/responses` | 閺傚洦婀伴柅蹇庣炊 |
+| POST | `/v1/embeddings` | 閺傚洦婀伴柅蹇庣炊 |
+| GET | `/v1/models` | 閺傚洦婀伴柅蹇庣炊 |
+| POST | `/v1/images/generations` | **鏉烆剚宕?*閿涙碍鏋冮悽鐔锋禈 |
+| POST | `/v1/images/edits` | **鏉烆剚宕?*閿涙艾娴橀悽鐔锋禈閿涘潰ultipart閿?|
+| GET | `/healthz` | 閸嬨儱鎮嶅Λ鈧弻銉礄閸忓秹澹岄弶鍐跨礆 |
+| * | `/v1/*` 閸忔湹绮?| 閺傚洦婀伴柅蹇庣炊閸忔粌绨?|
 
-> `/v1/images/variations` 鏄庣‘涓嶅疄鐜帮紝杩斿洖 404銆?
-## 鐜鍙橀噺
-
-| 鍙橀噺 | 蹇呭～ | 榛樿鍊?| 璇存槑 |
+> `/v1/images/variations` 閺勫海鈥樻稉宥呯杽閻滃府绱濇潻鏂挎礀 404閵?
+## 閻滎垰顣ㄩ崣姗€鍣?
+| 閸欐﹢鍣?| 韫囧懎锝?| 姒涙顓婚崐?| 鐠囧瓨妲?|
 |---|---|---|---|
-| `QWEN_API_KEY` | 鉁?| 鈥?| Token Plan 涓撳睘 Key锛坄sk-sp-` 鍓嶇紑锛?|
-| `QWEN_BASE_URL` | | `https://token-plan.cn-beijing.maas.aliyuncs.com` | 鍖哄煙鏍瑰湴鍧€锛屾帹瀵兼枃鏈?鍥惧儚绔偣 |
-| `QWEN_TEXT_BASE_URL` | | `{QWEN_BASE_URL}/compatible-mode/v1` | 鏂囨湰閫忎紶鐩爣 |
-| `QWEN_IMAGE_BASE_URL` | | `{QWEN_BASE_URL}/api/v1/services/aigc/multimodal-generation/generation` | 鍥惧儚杞崲鐩爣 |
-| `EXPOSED_API_KEY` | | 绌猴紙涓嶉壌鏉冿級 | 瀵瑰鏆撮湶鐨?Key |
-| `LISTEN_ADDR` | | `:8080` | 鐩戝惉鍦板潃 |
-| `QWEN_IMAGE_MODEL` | | `qwen-image-2.0` | 鍥惧儚妯″瀷鍏滃簳/鏄犲皠鐩爣 |
-| `MODEL_ALIAS_<name>` | | 鏃?| 妯″瀷鍒悕锛屽 `MODEL_ALIAS_gpt-image-1=qwen-image-2.0-pro` |
-| `IMAGE_DOWNLOAD_CONCURRENCY` | | `4` | b64_json 骞跺彂涓嬭浇鏁?|
-| `IMAGE_MAX_BYTES` | | `20971520` (20MB) | 鍗曞紶鍥剧墖涓嬭浇涓婇檺 |
-| `UPSTREAM_TIMEOUT` | | `180s` | 鍥惧儚涓婃父瓒呮椂 |
-| `LOG_LEVEL` | | `info` | 鏃ュ織绾у埆 |
+| `QWEN_API_KEY` | 閴?| 閳?| Token Plan 娑撴挸鐫?Key閿涘潉sk-sp-` 閸撳秶绱戦敍?|
+| `QWEN_BASE_URL` | | `https://token-plan.cn-beijing.maas.aliyuncs.com` | 閸栧搫鐓欓弽鐟版勾閸р偓閿涘本甯圭€靛吋鏋冮張?閸ユ儳鍎氱粩顖滃仯 |
+| `QWEN_TEXT_BASE_URL` | | `{QWEN_BASE_URL}/compatible-mode/v1` | 閺傚洦婀伴柅蹇庣炊閻╊喗鐖?|
+| `QWEN_IMAGE_BASE_URL` | | `{QWEN_BASE_URL}/api/v1/services/aigc/multimodal-generation/generation` | 閸ユ儳鍎氭潪顒佸床閻╊喗鐖?|
+| `EXPOSED_API_KEY` | | 缁岀尨绱欐稉宥夊閺夊喛绱?| 鐎电懓顦婚弳鎾苟閻?Key |
+| `LISTEN_ADDR` | | `:8080` | 閻╂垵鎯夐崷鏉挎絻 |
+| `QWEN_IMAGE_MODEL` | | `qwen-image-2.0` | 閸ユ儳鍎氬Ο鈥崇€烽崗婊冪俺/閺勭姴鐨犻惄顔界垼 |
+| `MODEL_ALIAS_<name>` | | 閺?| 濡€崇€烽崚顐㈡倳閿涘苯顩?`MODEL_ALIAS_gpt-image-1=qwen-image-2.0-pro` |
+| `IMAGE_DOWNLOAD_CONCURRENCY` | | `4` | b64_json 楠炶泛褰傛稉瀣祰閺?|
+| `IMAGE_MAX_BYTES` | | `20971520` (20MB) | 閸楁洖绱堕崶鍓у娑撳娴囨稉濠囨 |
+| `UPSTREAM_TIMEOUT` | | `180s` | 閸ユ儳鍎氭稉濠冪埗鐡掑懏妞?|
+| `LOG_LEVEL` | | `info` | 閺冦儱绻旂痪褍鍩?|
 
-## 鍥惧儚鍗忚杞崲璇存槑
+## 閸ユ儳鍎氶崡蹇氼唴鏉烆剚宕茬拠瀛樻
 
-### 璇锋眰锛歄penAI 鈫?Qwen
+### 鐠囬攱鐪伴敍姝刾enAI 閳?Qwen
 
 | OpenAI | Qwen |
 |---|---|
-| `model` | 鍒悕鏄犲皠 > Qwen 绯诲師鏍烽€忎紶锛坄qwen-image-*`/`wan*-image`/`z-image-*`锛? 榛樿 `QWEN_IMAGE_MODEL` |
+| `model` | 閸掝偄鎮曢弰鐘茬殸 > Qwen 缁甯弽鐑解偓蹇庣炊閿涘潉qwen-image-*`/`wan*-image`/`z-image-*`閿? 姒涙顓?`QWEN_IMAGE_MODEL` |
 | `prompt` | `input.messages[0].content[0].text` |
-| `n`锛?~10锛?| `parameters.n`锛堥挸鍒?1~6锛?|
-| `size` `"1024x1024"` | `parameters.size` `"1024*1024"`锛坄x`鈫抈*`锛涢潪娉曞垯鐪佺暐鐢?Qwen 榛樿锛?|
+| `n`閿?~10閿?| `parameters.n`閿涘牓鎸搁崚?1~6閿?|
+| `size` `"1024x1024"` | `parameters.size` `"1024*1024"`閿涘潉x`閳妶*`閿涙盯娼▔鏇炲灟閻胶鏆愰悽?Qwen 姒涙顓婚敍?|
 | `quality=high/low` | `parameters.prompt_extend=true/false` |
-| `thinking`锛堜粎 qwen-image-3.0 鐩爣锛?| `parameters.thinking` |
-| `user` / `style` / `background` / `output_format` | 蹇界暐锛圦wen 鏃犲搴旇兘鍔涳紱`output_format` 鎭?PNG锛?|
+| `thinking`閿涘牅绮?qwen-image-3.0 閻╊喗鐖ｉ敍?| `parameters.thinking` |
+| `user` / `style` / `background` / `output_format` | 韫囩晫鏆愰敍鍦en 閺冪姴顕惔鏃囧厴閸旀冻绱盽output_format` 閹?PNG閿?|
 
-### 鍝嶅簲锛歈wen 鈫?OpenAI
+### 閸濆秴绨查敍姝坵en 閳?OpenAI
 
 ```jsonc
 // Qwen
 { "output": { "choices": [{ "message": { "content": [ { "image": "https://..." } ] } }] },
   "request_id": "..." }
-// 鈫?OpenAI
-{ "created": 1750000000, "data": [ { "url": "https://..." } ] }        // url 妯″紡锛岄浂涓嬭浇
-{ "created": 1750000000, "data": [ { "b64_json": "..." } ] }          // b64_json 妯″紡锛屽苟鍙戜笅杞藉悗杩斿洖
+// 閳?OpenAI
+{ "created": 1750000000, "data": [ { "url": "https://..." } ] }        // url 濡€崇础閿涘矂娴傛稉瀣祰
+{ "created": 1750000000, "data": [ { "b64_json": "..." } ] }          // b64_json 濡€崇础閿涘苯鑻熼崣鎴滅瑓鏉炶棄鎮楁潻鏂挎礀
 ```
 
-- `request_id` 閫忓嚭鍒板搷搴斿ご `X-Request-Id`銆?- 涓婃父闈?2xx锛氱姸鎬佺爜涓庨敊璇綋鍘熸牱閫忎紶銆?- `revised_prompt` 鐪佺暐锛圦wen 涓嶈繑鍥炴敼鍐欏悗鎻愮ず璇嶏級銆?
-## 鎬ц兘璁捐
-
-- 鏂囨湰璺緞锛歚httputil.ReverseProxy` + 鍏ㄥ眬 `http.Transport` 杩炴帴姹狅紙keep-alive銆丠TTP/2锛夛紝`FlushInterval=-1` 鍗虫椂 flush锛?*涓嶈В鏋?body**銆?- 鍥惧儚璺緞锛氳浆鎹㈠嚱鏁版棤鐘舵€併€佺函鍑芥暟锛宍sync.Pool` 澶嶇敤缂撳啿锛沗b64_json` 鏈夌晫骞跺彂 + 澶у皬涓婇檺锛涙棩蹇椾笉璁板綍 body銆?- 鍩哄噯锛歚make bench`锛坄go test -bench . -benchmem ./internal/image/`锛夈€?
-## 寮€鍙?
+- `request_id` 闁繐鍤崚鏉挎惙鎼存柨銇?`X-Request-Id`閵?- 娑撳﹥鐖堕棃?2xx閿涙氨濮搁幀浣虹垳娑撳酣鏁婄拠顖欑秼閸樼喐鐗遍柅蹇庣炊閵?- `revised_prompt` 閻胶鏆愰敍鍦en 娑撳秷绻戦崶鐐存暭閸愭瑥鎮楅幓鎰仛鐠囧稄绱氶妴?
+## 閹嗗厴鐠佹崘顓?
+- 閺傚洦婀扮捄顖氱窞閿涙瓪httputil.ReverseProxy` + 閸忋劌鐪?`http.Transport` 鏉╃偞甯村Ч鐙呯礄keep-alive閵嗕笭TTP/2閿涘绱漙FlushInterval=-1` 閸楄櫕妞?flush閿?*娑撳秷袙閺?body**閵?- 閸ユ儳鍎氱捄顖氱窞閿涙俺娴嗛幑銏犲毐閺佺増妫ら悩鑸碘偓浣碘偓浣哄嚱閸戣姤鏆熼敍瀹峴ync.Pool` 婢跺秶鏁ょ紓鎾冲暱閿涙矖b64_json` 閺堝鏅獮璺哄絺 + 婢堆冪毈娑撳﹪妾洪敍娑欐）韫囨ぞ绗夌拋鏉跨秿 body閵?- 閸╁搫鍣敍姝歮ake bench`閿涘潉go test -bench . -benchmem ./internal/image/`閿涘鈧?
+## 瀵偓閸?
 ```bash
-make build    # 缂栬瘧 bin/openai-to-qwen
-make test     # 鍗曞厓 + 闆嗘垚娴嬭瘯锛坔ttptest 妯℃嫙 Qwen 涓婃父锛屾棤闇€鐪熷疄 Key锛?make bench    # 鍩哄噯娴嬭瘯
-make docker   # 鏋勫缓闀滃儚
+make build    # 缂傛牞鐦?bin/openai-to-qwen
+make test     # 閸楁洖鍘?+ 闂嗗棙鍨氬ù瀣槸閿涘潝ttptest 濡剝瀚?Qwen 娑撳﹥鐖堕敍灞炬￥闂団偓閻喎鐤?Key閿?make bench    # 閸╁搫鍣ù瀣槸
+make docker   # 閺嬪嫬缂撻梹婊冨剼
 ```
 
-## 椤圭洰缁撴瀯
-
+## 妞ゅ湱娲扮紒鎾寸€?
 ```
-cmd/server/          鍏ュ彛
-internal/config/     鐜鍙橀噺閰嶇疆
-internal/proxy/      鏂囨湰閫忎紶鍙嶅悜浠ｇ悊
-internal/image/      OpenAI鈫擰wen 鍥惧儚鍗忚杞崲锛坮equest/response/download/edits锛?internal/modelmap/   妯″瀷鍚嶆槧灏?internal/server/     璺敱銆侀壌鏉冦€佹棩蹇椼€佸仴搴锋鏌?```
+cmd/server/          閸忋儱褰?internal/config/     閻滎垰顣ㄩ崣姗€鍣洪柊宥囩枂
+internal/proxy/      閺傚洦婀伴柅蹇庣炊閸欏秴鎮滄禒锝囨倞
+internal/image/      OpenAI閳摪wen 閸ユ儳鍎氶崡蹇氼唴鏉烆剚宕查敍鍧甧quest/response/download/edits閿?internal/modelmap/   濡€崇€烽崥宥嗘Ё鐏?internal/server/     鐠侯垳鏁遍妴渚€澹岄弶鍐︹偓浣规）韫囨ぜ鈧礁浠存惔閿嬵梾閺?```
 
-## 宸茬煡闄愬埗
+## 瀹歌尙鐓￠梽鎰煑
 
-- Qwen 杈撳嚭鎭掍负 PNG锛沗output_format`锛坖peg/webp锛夈€侀€忔槑鑳屾櫙锛坄background`锛変笉鏀寔銆?- `images/variations` 涓嶆敮鎸併€?- 璇煶锛圱TS 璧?WebSocket锛夈€佽棰戯紙寮傛浠诲姟鍒讹級涓嶅湪鑼冨洿鍐呫€
-## 发布（推送到阿里云 ACR）
+- Qwen 鏉堟挸鍤幁鎺嶈礋 PNG閿涙矖output_format`閿涘潠peg/webp閿涘鈧線鈧繑妲戦懗灞炬珯閿涘潉background`閿涘绗夐弨顖涘瘮閵?- `images/variations` 娑撳秵鏁幐浣碘偓?- 鐠囶參鐓堕敍鍦盩S 鐠?WebSocket閿涘鈧浇顫嬫０鎴礄瀵倹顒炴禒璇插閸掕绱氭稉宥呮躬閼煎啫娲块崘鍛偓
+## 鍙戝竷锛堟帹閫佸埌闃块噷浜?ACR锛?
+闀滃儚鍦板潃锛歚registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen`
 
-镜像地址：`registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen`
+涓夌鍙戝竷鏂瑰紡锛堜换閫夊叾涓€锛夛細
 
-三种发布方式（任选其一）：
-
-1. **GitHub Actions（推荐）**：推送 `v*` tag 后自动构建并推送。仓库需配置 Secrets：`ALIYUN_REGISTRY_USERNAME`、`ALIYUN_REGISTRY_PASSWORD`。也可在 Actions 页面手动触发 `release` 工作流。
-2. **本机无 Docker 时（daemonless）**：使用仓库内置工具，直接构建 OCI 镜像并推送（scratch + 静态二进制 + CA 证书，无需任何容器运行时）：
-   ```bash
-   ACR_USERNAME=<你的ACR用户名> ACR_PASSWORD=<你的ACR密码> go run ./tools/release
-   # 默认推 registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen:v1.0.0 和 :latest
-   # 本地验证（不推送）：go run ./tools/release -tarball out.tar / -extract dir
+1. **GitHub Actions锛堟帹鑽愶級**锛氭帹閫?`v*` tag 鍚庤嚜鍔ㄦ瀯寤哄苟鎺ㄩ€併€備粨搴撻渶閰嶇疆 Secrets锛歚ALIYUN_REGISTRY_USERNAME`銆乣ALIYUN_REGISTRY_PASSWORD`銆備篃鍙湪 Actions 椤甸潰鎵嬪姩瑙﹀彂 `release` 宸ヤ綔娴併€?2. **鏈満鏃?Docker 鏃讹紙daemonless锛?*锛氫娇鐢ㄤ粨搴撳唴缃伐鍏凤紝鐩存帴鏋勫缓 OCI 闀滃儚骞舵帹閫侊紙scratch + 闈欐€佷簩杩涘埗 + CA 璇佷功锛屾棤闇€浠讳綍瀹瑰櫒杩愯鏃讹級锛?   ```bash
+   ACR_USERNAME=<浣犵殑ACR鐢ㄦ埛鍚? ACR_PASSWORD=<浣犵殑ACR瀵嗙爜> go run ./tools/release
+   # 榛樿鎺?registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen:v1.0.0 鍜?:latest
+   # 鏈湴楠岃瘉锛堜笉鎺ㄩ€侊級锛歡o run ./tools/release -tarball out.tar / -extract dir
    ```
-3. **有 Docker 时**：`docker build -t registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen:v1.0.0 . && docker push ...`
+3. **鏈?Docker 鏃?*锛歚docker build -t registry.cn-hangzhou.aliyuncs.com/liugangqiang/openai-to-qwen:v1.0.0 . && docker push ...`
