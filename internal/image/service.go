@@ -37,7 +37,11 @@ func NewService(cfg *config.Config, client *http.Client, lg *logger.Logger) *Ser
 func (s *Service) HandleGenerations(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	start := time.Now()
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBytes+1))
+	// Pre-size the buffer from Content-Length so large bodies are read with
+	// one allocation instead of ReadAll's doubling-growth copies.
+	buf := bytes.NewBuffer(make([]byte, 0, bodyHint(r)))
+	_, err := buf.ReadFrom(io.LimitReader(r.Body, maxRequestBytes+1))
+	body := buf.Bytes()
 	if err != nil {
 		s.log.Errorf("image generations: read body failed: %v", err)
 		proxy.WriteJSONError(w, http.StatusBadRequest, "read request body failed")
@@ -48,7 +52,12 @@ func (s *Service) HandleGenerations(w http.ResponseWriter, r *http.Request) {
 		proxy.WriteJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
 		return
 	}
-	s.log.Debugf("image generations incoming path=%s body=%s", r.URL.Path, truncate(string(body), 4096))
+	// Debug arguments are eager, so guard the body copy behind the level
+	// check: with logging off (default) the hot path must not copy the
+	// request body just to discard it.
+	if s.log.Enabled(logger.LevelDebug) {
+		s.log.Debugf("image generations incoming path=%s body=%s", r.URL.Path, truncate(string(body), 4096))
+	}
 
 	qreq, respFormat, dropped, err := ConvertGenerations(body, s.cfg.ModelAliases, s.cfg.QwenImageModel)
 	if err != nil {
@@ -93,7 +102,9 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 		return
 	}
 	s.log.Infof("image upstream request url=%s model=%s", s.cfg.QwenImageBaseURL, qreq.Model)
-	s.log.Debugf("image upstream request body=%s", truncate(string(payload), 4096))
+	if s.log.Enabled(logger.LevelDebug) {
+		s.log.Debugf("image upstream request body=%s", truncate(string(payload), 4096))
+	}
 
 	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, s.cfg.QwenImageBaseURL, bytes.NewReader(payload))
 	if err != nil {
@@ -122,6 +133,10 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+		// Drain a bounded remainder so the upstream connection can return
+		// to the keep-alive pool instead of being discarded after this reply
+		// (bounded in case upstream misbehaves and streams an error body).
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 		s.log.Errorf("image upstream non-2xx: model=%s status=%d duration=%s request_id=%s request=%s body=%s",
 			qreq.Model, resp.StatusCode, upstreamDur, resp.Header.Get("X-Request-Id"), truncate(string(payload), 2048), truncate(string(body), 2048))
 		// Pass the upstream error through verbatim (headers included) so the
@@ -186,6 +201,16 @@ func imageCount(q *QwenRequest) int {
 		}
 	}
 	return n
+}
+
+// bodyHint picks an initial read-buffer size for a request body: the
+// declared Content-Length when sane, capped at maxRequestBytes+1 so a lying
+// client cannot force a huge preallocation.
+func bodyHint(r *http.Request) int {
+	if r.ContentLength > 0 && r.ContentLength <= maxRequestBytes+1 {
+		return int(r.ContentLength)
+	}
+	return 512
 }
 
 func truncate(s string, max int) string {
