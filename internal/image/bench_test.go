@@ -11,7 +11,7 @@ func BenchmarkConvertGenerations(b *testing.B) {
 	aliases := map[string]string{"gpt-image-1": "qwen-image-2.0-pro"}
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		if _, _, err := ConvertGenerations(body, aliases, "qwen-image-2.0"); err != nil {
+		if _, _, _, err := ConvertGenerations(body, aliases, "qwen-image-2.0"); err != nil {
 			b.Fatal(err)
 		}
 	}

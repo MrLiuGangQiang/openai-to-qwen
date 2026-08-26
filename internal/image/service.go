@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"openai-to-qwen/internal/config"
@@ -49,7 +50,7 @@ func (s *Service) HandleGenerations(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Debugf("image generations incoming path=%s body=%s", r.URL.Path, truncate(string(body), 4096))
 
-	qreq, respFormat, err := ConvertGenerations(body, s.cfg.ModelAliases, s.cfg.QwenImageModel)
+	qreq, respFormat, dropped, err := ConvertGenerations(body, s.cfg.ModelAliases, s.cfg.QwenImageModel)
 	if err != nil {
 		s.log.Errorf("image generations: convert failed: %v", err)
 		proxy.WriteJSONError(w, http.StatusBadRequest, err.Error())
@@ -57,6 +58,9 @@ func (s *Service) HandleGenerations(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Infof("image generations: model=%s params=%v response_format=%q prompt_len=%d",
 		qreq.Model, qreq.Parameters, respFormat, promptLen(qreq))
+	if len(dropped) > 0 {
+		s.log.Infof("image generations: no Qwen equivalent, dropped: %s", strings.Join(dropped, ", "))
+	}
 	s.forward(w, r, qreq, respFormat, start)
 }
 
@@ -64,7 +68,7 @@ func (s *Service) HandleGenerations(w http.ResponseWriter, r *http.Request) {
 func (s *Service) HandleEdits(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	start := time.Now()
-	qreq, respFormat, err := ConvertEdits(r, s.cfg.ImageMaxBytes, s.cfg.ModelAliases, s.cfg.QwenImageModel)
+	qreq, respFormat, dropped, err := ConvertEdits(r, s.cfg.ImageMaxBytes, s.cfg.ModelAliases, s.cfg.QwenImageModel)
 	if err != nil {
 		s.log.Errorf("image edits: convert failed: %v", err)
 		proxy.WriteJSONError(w, http.StatusBadRequest, err.Error())
@@ -72,6 +76,9 @@ func (s *Service) HandleEdits(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Infof("image edits: model=%s images=%d params=%v response_format=%q",
 		qreq.Model, imageCount(qreq), qreq.Parameters, respFormat)
+	if len(dropped) > 0 {
+		s.log.Infof("image edits: no Qwen equivalent, dropped: %s", strings.Join(dropped, ", "))
+	}
 	s.forward(w, r, qreq, respFormat, start)
 }
 
@@ -117,7 +124,9 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
 		s.log.Errorf("image upstream non-2xx: model=%s status=%d duration=%s request_id=%s request=%s body=%s",
 			qreq.Model, resp.StatusCode, upstreamDur, resp.Header.Get("X-Request-Id"), truncate(string(payload), 2048), truncate(string(body), 2048))
-		w.Header().Set("Content-Type", "application/json")
+		// Pass the upstream error through verbatim (headers included) so the
+		// client sees the real error code/message and can trace the request.
+		copyUpstreamHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(body)
 		return
@@ -145,10 +154,11 @@ func (s *Service) forward(w http.ResponseWriter, r *http.Request, qreq *QwenRequ
 	}
 	s.log.Infof("image ok: model=%s status=%d upstream=%s total=%s images=%d request_id=%s first_url=%s",
 		qreq.Model, resp.StatusCode, upstreamDur, time.Since(start), len(out.Data), qresp.RequestID, firstURL)
-	w.Header().Set("Content-Type", "application/json")
+	copyUpstreamHeaders(w.Header(), resp.Header)
 	if qresp.RequestID != "" {
 		w.Header().Set("X-Request-Id", qresp.RequestID)
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(out)
 }

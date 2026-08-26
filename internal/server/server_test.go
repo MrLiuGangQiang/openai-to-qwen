@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -333,5 +334,110 @@ func TestImagesVariationsNotFound(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+// TestImagesGenerationsPreservesUsageAndHeaders verifies the image response
+// echoes Qwen's usage/request_id in the body and copies upstream diagnostic
+// headers (rate-limit, X-Request-Id, custom) so no upstream information is
+// lost in the conversion.
+func TestImagesGenerationsPreservesUsageAndHeaders(t *testing.T) {
+	const upstreamBody = `{"output":{"choices":[{"finish_reason":"stop","message":{"content":[{"image":"https://img.example/1.png"}]}}]},"usage":{"width":1024,"height":1024,"image_count":1},"request_id":"req-usage-1"}`
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Request-Id", "req-usage-1")
+		w.Header().Set("X-RateLimit-Remaining", "42")
+		w.Header().Set("X-DashScope-Trace", "abc123")
+		w.Header().Set("Retry-After", "3")
+		w.Header().Set("Content-Length", strconv.Itoa(len(upstreamBody)))
+		_, _ = io.WriteString(w, upstreamBody)
+	}))
+	defer upstream.Close()
+
+	cfg := newTestConfig("http://text.invalid", upstream.URL+"/api/v1/services/aigc/multimodal-generation/generation", "")
+	ts := newGateway(t, cfg)
+
+	resp, err := http.Post(ts.URL+"/v1/images/generations", "application/json",
+		strings.NewReader(`{"model":"dall-e-3","prompt":"a cat"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, body = %s", resp.StatusCode, b)
+	}
+
+	for _, h := range []string{"X-Request-Id", "X-RateLimit-Remaining", "X-DashScope-Trace", "Retry-After"} {
+		if got := resp.Header.Get(h); got == "" {
+			t.Errorf("response missing upstream header %s", h)
+		} else if h == "X-Request-Id" && got != "req-usage-1" {
+			t.Errorf("X-Request-Id = %q, want req-usage-1", got)
+		} else if h == "X-RateLimit-Remaining" && got != "42" {
+			t.Errorf("X-RateLimit-Remaining = %q, want 42", got)
+		}
+	}
+
+	var out struct {
+		Created int64 `json:"created"`
+		Data    []struct {
+			URL string `json:"url"`
+		} `json:"data"`
+		QwenUsage json.RawMessage `json:"qwen_usage"`
+		RequestID string          `json:"request_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if string(out.QwenUsage) != `{"width":1024,"height":1024,"image_count":1}` {
+		t.Errorf("qwen_usage = %s", out.QwenUsage)
+	}
+	if out.RequestID != "req-usage-1" {
+		t.Errorf("request_id = %q, want req-usage-1", out.RequestID)
+	}
+	if len(out.Data) != 1 || out.Data[0].URL != "https://img.example/1.png" {
+		t.Errorf("data = %+v", out.Data)
+	}
+	// The converted body is longer than the upstream body; Content-Length must
+	// be recomputed by the gateway, not copied from upstream.
+	if resp.ContentLength == int64(len(upstreamBody)) {
+		t.Error("Content-Length must be recomputed after body rewrite, not copied from upstream")
+	}
+}
+
+// TestImagesGenerationsErrorPassthrough verifies upstream error responses are
+// forwarded verbatim, including headers (X-Request-Id, Retry-After), so the
+// client can see the real error and trace the request.
+func TestImagesGenerationsErrorPassthrough(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Request-Id", "req-err-9")
+		w.Header().Set("Retry-After", "5")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"request_id":"req-err-9","code":"Throttling","message":"rate limit exceeded"}`)
+	}))
+	defer upstream.Close()
+
+	cfg := newTestConfig("http://text.invalid", upstream.URL+"/api/v1/services/aigc/multimodal-generation/generation", "")
+	ts := newGateway(t, cfg)
+
+	resp, err := http.Post(ts.URL+"/v1/images/generations", "application/json",
+		strings.NewReader(`{"model":"dall-e-3","prompt":"a cat"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", resp.StatusCode)
+	}
+	if got := resp.Header.Get("X-Request-Id"); got != "req-err-9" {
+		t.Errorf("X-Request-Id = %q, want req-err-9", got)
+	}
+	if got := resp.Header.Get("Retry-After"); got != "5" {
+		t.Errorf("Retry-After = %q, want 5", got)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Throttling") || !strings.Contains(string(body), "rate limit exceeded") {
+		t.Errorf("error body = %s", body)
 	}
 }

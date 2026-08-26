@@ -160,3 +160,32 @@ text upstream url=https://token-plan.../chat/completions status=200 duration=1.2
 - 有 `image upstream request` 但没有后续 `image ok` / `non-2xx` / `error` → 请求发出去后上游挂起，等超时
 - `image upstream non-2xx` 里的 `body=` 就是上游真实报错（如 Unsupported model）
 - 完全没有 `req` 行 → 请求根本没到网关（被前面 nginx/ingress 拦了）
+---
+
+## 信息无损说明（v1.2.0 审计结论）
+
+> 设计目标：**只做协议转换，不丢信息**。以下结论均对照 OpenAI Images API 与 Qwen multimodal-generation 官方文档。
+
+### 文本路径 `/v1/*`（chat/completions、responses、embeddings、models）
+- 纯字节级透传：请求/响应 body 完全不解析，`usage.prompt_tokens_details.cached_tokens`、`cache_creation_input_tokens`、`x_details` 等缓存/计费字段**原样**到达客户端（证据见 `.tools/gw_stream.txt`，其中 `"cached_tokens":0` 就是上游原样返回的值）。
+- SSE 流式只追加 `X-Accel-Buffering: no` 与 `Cache-Control: no-cache`，不修改任何 `data:` 事件。
+- `Authorization` 等请求头原样透传。
+
+### 图像路径 `/v1/images/*`
+请求侧（OpenAI → Qwen）：
+- `model` / `prompt` / `n` / `size` / `quality` / `thinking` 映射到 Qwen 参数；其中 `thinking`（qwen-image-3.0 系列）按官方文档映射为 **`enable_thinking`**。
+- OpenAI 独有、Qwen 无对应能力的字段**记录 INFO 日志而非静默丢弃**：`style`、`user`、`output_format`、`background`、`moderation`、`output_compression`。注意：Qwen 恒输出 PNG，`output_format=jpeg/webp`、`background=transparent` 无法满足，客户端应避免使用。
+
+响应侧（Qwen → OpenAI）：
+- Qwen `usage` **原样**放入响应体 **`qwen_usage`** 字段（2.0 系列为 `{width,height,image_count}`，3.0 系列为 `{output_*,input_*}`）。不放入 OpenAI 标准 `usage` 字段的原因：OpenAI SDK 对 `usage` 做严格类型校验（token 结构），像素级字段会导致解析报错；而未知字段 `qwen_usage` 会被 SDK 安全忽略。
+- `request_id` 同时透出到响应体 **`request_id`** 与响应头 **`X-Request-Id`**。
+- 上游响应头（限流、`Retry-After`、`X-DashScope-*` 等诊断头）**全部透传**给客户端（跳过 hop-by-hop 与 `Content-Length`/`Content-Encoding`，后者由网关重新计算）。
+- 上游非 2xx 错误：状态码、错误体、响应头（含 `X-Request-Id`、`Retry-After`）原样透传。
+
+### 缓存（Context Cache）说明
+- 网关文本路径不解析 body，因此**不会剥离**任何缓存命中信息；`cached_tokens` 是多少就是上游返回多少。
+- 缓存由上游（阿里云百炼）控制，与网关无关。常见未命中原因（官方文档）：
+  1. 隐式缓存最小公共前缀 256 Token（qwen3.7 等约 2000 Token），短请求不缓存；
+  2. 显式缓存需在 message content 加 `cache_control:{"type":"ephemeral"}`，且最小 1024 Token、有效期 5 分钟、最多 4 个标记、20 个 content 块回溯；
+  3. `/v1/responses` 走的是 **Session 缓存**而非 Context Cache（Context Cache 仅适用于 Chat Completions / DashScope / Anthropic 兼容接口）；
+  4. 缓存命中率并非 100%；首次请求只创建缓存，第二次起才可能命中。

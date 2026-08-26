@@ -18,17 +18,45 @@ const maxN = 6
 // openAIGenerationsRequest is the subset of POST /v1/images/generations we
 // consume. Unknown fields are ignored on purpose.
 type openAIGenerationsRequest struct {
-	Model          string `json:"model"`
-	Prompt         string `json:"prompt"`
-	N              *int   `json:"n"`
-	Size           string `json:"size"`
-	Quality        string `json:"quality"`
-	Style          string `json:"style"`
-	ResponseFormat string `json:"response_format"`
-	User           string `json:"user"`
-	OutputFormat   string `json:"output_format"`
-	Background     string `json:"background"`
-	Thinking       string `json:"thinking"`
+	Model             string `json:"model"`
+	Prompt            string `json:"prompt"`
+	N                 *int   `json:"n"`
+	Size              string `json:"size"`
+	Quality           string `json:"quality"`
+	Style             string `json:"style"`
+	ResponseFormat    string `json:"response_format"`
+	User              string `json:"user"`
+	OutputFormat      string `json:"output_format"`
+	Background        string `json:"background"`
+	Moderation        string `json:"moderation"`
+	OutputCompression *int   `json:"output_compression"`
+	Thinking          string `json:"thinking"`
+}
+
+// droppedFields returns the OpenAI-only fields that were parsed but have no
+// Qwen equivalent, so callers can surface them in logs instead of silently
+// losing information.
+func (r openAIGenerationsRequest) droppedFields() []string {
+	var d []string
+	if r.Style != "" {
+		d = append(d, "style="+r.Style)
+	}
+	if r.User != "" {
+		d = append(d, "user="+r.User)
+	}
+	if r.OutputFormat != "" {
+		d = append(d, "output_format="+r.OutputFormat)
+	}
+	if r.Background != "" {
+		d = append(d, "background="+r.Background)
+	}
+	if r.Moderation != "" {
+		d = append(d, "moderation="+r.Moderation)
+	}
+	if r.OutputCompression != nil {
+		d = append(d, fmt.Sprintf("output_compression=%d", *r.OutputCompression))
+	}
+	return d
 }
 
 // QwenRequest is the Qwen multimodal-generation request body.
@@ -56,15 +84,16 @@ type QwenContent struct {
 }
 
 // ConvertGenerations parses an OpenAI images/generations JSON body into a
-// Qwen request. It returns the Qwen request and the requested response_format
-// (used later for response conversion).
-func ConvertGenerations(body []byte, aliases map[string]string, fallbackModel string) (*QwenRequest, string, error) {
+// Qwen request. It returns the Qwen request, the requested response_format
+// (used later for response conversion), and the names of OpenAI-only fields
+// that have no Qwen equivalent (for logging; never nil).
+func ConvertGenerations(body []byte, aliases map[string]string, fallbackModel string) (*QwenRequest, string, []string, error) {
 	var req openAIGenerationsRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		return nil, "", fmt.Errorf("invalid request body: %w", err)
+		return nil, "", nil, fmt.Errorf("invalid request body: %w", err)
 	}
 	if req.Prompt == "" {
-		return nil, "", fmt.Errorf("prompt is required")
+		return nil, "", nil, fmt.Errorf("prompt is required")
 	}
 	model := modelmap.ResolveImageModel(req.Model, aliases, fallbackModel)
 	q := &QwenRequest{
@@ -77,7 +106,7 @@ func ConvertGenerations(body []byte, aliases map[string]string, fallbackModel st
 		},
 		Parameters: buildParameters(req.N, req.Size, req.Quality, req.Thinking, model),
 	}
-	return q, req.ResponseFormat, nil
+	return q, req.ResponseFormat, req.droppedFields(), nil
 }
 
 // buildParameters maps optional OpenAI fields into Qwen parameters.
@@ -95,8 +124,10 @@ func buildParameters(n *int, size, quality, thinking, model string) map[string]a
 	case "low":
 		params["prompt_extend"] = false
 	}
+	// qwen-image-3.0 series exposes thinking mode as enable_thinking
+	// (see the official Qwen Image Generation and Editing 3.0 API reference).
 	if thinking != "" && strings.HasPrefix(model, "qwen-image-3.0") {
-		params["thinking"] = thinking != "off"
+		params["enable_thinking"] = thinking != "off"
 	}
 	return params
 }
@@ -156,9 +187,21 @@ type QwenMsg struct {
 }
 
 // OpenAIResponse is the OpenAI images/generations response shape.
+//
+// QwenUsage and RequestID are extra namespaced fields that preserve upstream
+// information without breaking OpenAI clients: the OpenAI SDK type-checks the
+// standard `usage` field (token-based) and would reject Qwen's pixel-based
+// usage object, but unknown fields such as `qwen_usage` are ignored.
 type OpenAIResponse struct {
 	Created int64             `json:"created"`
 	Data    []OpenAIImageData `json:"data"`
+	// QwenUsage mirrors the upstream usage object verbatim, e.g.
+	// {"width":1024,"height":1024,"image_count":1} for the 2.0 series or
+	// {"output_width":...,"output_image_count":...} for the 3.0 series.
+	QwenUsage json.RawMessage `json:"qwen_usage,omitempty"`
+	// RequestID mirrors the upstream request_id so clients can trace calls
+	// without relying on the X-Request-Id header alone.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 // OpenAIImageData is one generated image.
@@ -187,8 +230,10 @@ func ConvertResponse(ctx context.Context, qresp *QwenResponse, responseFormat st
 	}
 
 	out := &OpenAIResponse{
-		Created: time.Now().Unix(),
-		Data:    make([]OpenAIImageData, 0, len(images)),
+		Created:   time.Now().Unix(),
+		Data:      make([]OpenAIImageData, 0, len(images)),
+		QwenUsage: qresp.Usage,
+		RequestID: qresp.RequestID,
 	}
 
 	if responseFormat == "b64_json" {

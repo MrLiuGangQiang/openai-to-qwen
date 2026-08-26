@@ -3,6 +3,7 @@ package image
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
@@ -39,7 +40,7 @@ func TestConvertGenerations(t *testing.T) {
 		"thinking": "medium",
 		"response_format": "b64_json"
 	}`)
-	q, respFmt, err := ConvertGenerations(body, aliases, "qwen-image-2.0")
+	q, respFmt, dropped, err := ConvertGenerations(body, aliases, "qwen-image-2.0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,18 +63,69 @@ func TestConvertGenerations(t *testing.T) {
 	if got := q.Parameters["prompt_extend"]; got != true {
 		t.Errorf("prompt_extend = %v, want true", got)
 	}
-	// thinking maps only for qwen-image-3.0 targets
+	// thinking maps only for qwen-image-3.0 targets (as enable_thinking)
 	if _, ok := q.Parameters["thinking"]; ok {
 		t.Errorf("thinking should be dropped for non-3.0 model, got %v", q.Parameters["thinking"])
 	}
+	if _, ok := q.Parameters["enable_thinking"]; ok {
+		t.Errorf("enable_thinking should be dropped for non-3.0 model, got %v", q.Parameters["enable_thinking"])
+	}
 	if respFmt != "b64_json" {
 		t.Errorf("response_format = %q, want b64_json", respFmt)
+	}
+	if len(dropped) != 0 {
+		t.Errorf("dropped = %v, want none", dropped)
+	}
+}
+
+func TestConvertGenerationsEnableThinking(t *testing.T) {
+	// qwen-image-3.0 series maps the thinking switch to enable_thinking,
+	// matching the official API reference.
+	body := []byte(`{"model":"qwen-image-3.0-pro","prompt":"a cat","thinking":"on"}`)
+	q, _, _, err := ConvertGenerations(body, nil, "qwen-image-2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := q.Parameters["enable_thinking"]; got != true {
+		t.Errorf("enable_thinking = %v, want true", got)
+	}
+
+	body = []byte(`{"model":"qwen-image-3.0","prompt":"a cat","thinking":"off"}`)
+	q, _, _, err = ConvertGenerations(body, nil, "qwen-image-2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := q.Parameters["enable_thinking"]; got != false {
+		t.Errorf("enable_thinking = %v, want false", got)
+	}
+}
+
+func TestConvertGenerationsDroppedFields(t *testing.T) {
+	// OpenAI-only fields with no Qwen equivalent must be reported, not silently
+	// dropped, so the gateway can log them.
+	body := []byte(`{
+		"model":"gpt-image-1","prompt":"a cat",
+		"style":"vivid","user":"u-1","output_format":"webp",
+		"background":"transparent","moderation":"low","output_compression":50
+	}`)
+	_, _, dropped, err := ConvertGenerations(body, nil, "qwen-image-2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"style=vivid", "user=u-1", "output_format=webp", "background=transparent", "moderation=low", "output_compression=50"}
+	if len(dropped) != len(want) {
+		t.Fatalf("dropped = %v, want %v", dropped, want)
+	}
+	for i := range want {
+		if dropped[i] != want[i] {
+			t.Errorf("dropped[%d] = %q, want %q", i, dropped[i], want[i])
+		}
 	}
 }
 
 func TestConvertGenerationsQwenModelPassthrough(t *testing.T) {
 	body := []byte(`{"model":"qwen-image-2.0","prompt":"x"}`)
-	q, _, err := ConvertGenerations(body, nil, "qwen-image-2.0")
+	q, _, _, err := ConvertGenerations(body, nil, "qwen-image-2.0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +137,7 @@ func TestConvertGenerationsQwenModelPassthrough(t *testing.T) {
 func TestConvertGenerationsUsesRequestModel(t *testing.T) {
 	// The model from the request is passed through as-is, no mapping/fallback.
 	body := []byte(`{"model":"wan2.7-image","prompt":"a cat"}`)
-	q, _, err := ConvertGenerations(body, nil, "qwen-image-2.0")
+	q, _, _, err := ConvertGenerations(body, nil, "qwen-image-2.0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +149,7 @@ func TestConvertGenerationsUsesRequestModel(t *testing.T) {
 func TestConvertGenerationsFallbackWhenNoModel(t *testing.T) {
 	// Empty model falls back to the configured default.
 	body := []byte(`{"prompt":"a cat"}`)
-	q, _, err := ConvertGenerations(body, nil, "qwen-image-2.0")
+	q, _, _, err := ConvertGenerations(body, nil, "qwen-image-2.0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +159,7 @@ func TestConvertGenerationsFallbackWhenNoModel(t *testing.T) {
 }
 
 func TestConvertGenerationsMissingPrompt(t *testing.T) {
-	if _, _, err := ConvertGenerations([]byte(`{"model":"dall-e-3"}`), nil, "qwen-image-2.0"); err == nil {
+	if _, _, _, err := ConvertGenerations([]byte(`{"model":"dall-e-3"}`), nil, "qwen-image-2.0"); err == nil {
 		t.Error("expected error for missing prompt")
 	}
 }
@@ -139,6 +191,9 @@ func TestConvertResponseURL(t *testing.T) {
 	}
 	if out.Created == 0 {
 		t.Error("created must be set")
+	}
+	if out.RequestID != "req-1" {
+		t.Errorf("request_id = %q, want req-1", out.RequestID)
 	}
 }
 
@@ -175,6 +230,40 @@ func TestConvertResponseB64(t *testing.T) {
 	}
 	if out.Data[0].URL != "" {
 		t.Error("url must be empty in b64_json mode")
+	}
+}
+
+func TestConvertResponsePreservesQwenUsage(t *testing.T) {
+	// The upstream usage object (shape varies by model series) must be echoed
+	// verbatim so no usage information is lost.
+	usage2 := json.RawMessage(`{"width":1024,"height":1024,"image_count":2}`)
+	qresp := &QwenResponse{
+		Output: QwenOutput{Choices: []QwenChoice{{
+			Message: QwenMsg{Content: []QwenContent{{Image: "https://a/1.png"}}},
+		}}},
+		Usage:     usage2,
+		RequestID: "req-usage-2",
+	}
+	out, err := ConvertResponse(context.Background(), qresp, "url", fakeFetcher{}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out.QwenUsage) != string(usage2) {
+		t.Errorf("qwen_usage = %s, want %s", out.QwenUsage, usage2)
+	}
+	if out.RequestID != "req-usage-2" {
+		t.Errorf("request_id = %q, want req-usage-2", out.RequestID)
+	}
+
+	// 3.0 series usage shape must pass through unchanged as well.
+	usage3 := json.RawMessage(`{"output_width":2048,"output_height":2048,"output_image_count":1,"input_image_count":0}`)
+	qresp.Usage = usage3
+	out, err = ConvertResponse(context.Background(), qresp, "b64_json", fakeFetcher{}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out.QwenUsage) != string(usage3) {
+		t.Errorf("qwen_usage = %s, want %s", out.QwenUsage, usage3)
 	}
 }
 

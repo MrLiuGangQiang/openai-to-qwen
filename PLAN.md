@@ -333,3 +333,23 @@ api_key  = <EXPOSED_API_KEY>
 
 
 
+
+---
+
+## 13. 信息无损审计（v1.2.0，对照官方文档）
+
+### 已修复的信息丢失点
+1. **图像响应 `usage` 丢失** → 修复：Qwen `usage` 原样写入响应体 `qwen_usage`（2.0 系列 `{width,height,image_count}`；3.0 系列 `{output_*,input_*}`）。不占用 OpenAI 标准 `usage` 字段（OpenAI SDK 类型校验为 token 结构，像素字段会导致解析失败；未知字段则被安全忽略，已用 openai-python 3.3.1 实测）。
+2. **图像响应头丢失** → 修复：上游响应头（限流、`Retry-After`、`X-DashScope-*`、`X-Request-Id`）全部透传，跳过 hop-by-hop 与 `Content-Length`/`Content-Encoding`。
+3. **错误响应信息丢失** → 修复：上游非 2xx 时状态码/错误体/响应头原样透传（此前只透传 body）。
+4. **请求侧静默丢弃** → 修复：`style`/`user`/`output_format`/`background`/`moderation`/`output_compression` 记录 INFO 日志（Qwen 无等价参数，无法映射）。
+5. **`thinking` 参数名** → 修正：按官方文档（千问-图像生成与编辑3.0 API参考）改为 `enable_thinking`。
+
+### 文本路径结论
+`/v1/*` 为字节级透传，无信息丢失；缓存/计费字段（`cached_tokens` 等）原样返回。
+
+### 缓存命中说明（官方文档）
+- 隐式缓存：公共前缀 ≥256 Token（qwen3.7 等约 2000），命中率非 100%。
+- 显式缓存：`cache_control:{"type":"ephemeral"}` + ≥1024 Token + 5 分钟 TTL + 最多 4 标记 + 20 content 块回溯；首次请求只创建。
+- `/v1/responses` 使用 Session 缓存，不适用 Context Cache。
+- 支持模型：qwen3.8-max / qwen3.7-* / qwen-plus/flash 等（见官方「上下文缓存」模型列表；图像模型无缓存字段）。

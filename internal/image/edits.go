@@ -15,10 +15,11 @@ const maxFormMemory = 32 << 20 // 32 MiB in-memory before spilling to disk
 
 // ConvertEdits parses an OpenAI /v1/images/edits multipart request into a
 // Qwen multimodal-generation request (image-to-image).
-// Returns the Qwen request and the requested response_format.
-func ConvertEdits(r *http.Request, maxFileBytes int64, aliases map[string]string, fallbackModel string) (*QwenRequest, string, error) {
+// Returns the Qwen request, the requested response_format, and the names of
+// OpenAI-only fields that have no Qwen equivalent (for logging; never nil).
+func ConvertEdits(r *http.Request, maxFileBytes int64, aliases map[string]string, fallbackModel string) (*QwenRequest, string, []string, error) {
 	if err := r.ParseMultipartForm(maxFormMemory); err != nil {
-		return nil, "", fmt.Errorf("invalid multipart form: %w", err)
+		return nil, "", nil, fmt.Errorf("invalid multipart form: %w", err)
 	}
 	if r.MultipartForm != nil {
 		defer r.MultipartForm.RemoveAll()
@@ -26,7 +27,7 @@ func ConvertEdits(r *http.Request, maxFileBytes int64, aliases map[string]string
 
 	prompt := r.FormValue("prompt")
 	if prompt == "" {
-		return nil, "", fmt.Errorf("prompt is required")
+		return nil, "", nil, fmt.Errorf("prompt is required")
 	}
 	responseFormat := r.FormValue("response_format")
 
@@ -34,18 +35,18 @@ func ConvertEdits(r *http.Request, maxFileBytes int64, aliases map[string]string
 
 	imageFH := firstFile(r, "image")
 	if imageFH == nil {
-		return nil, "", fmt.Errorf("image file is required")
+		return nil, "", nil, fmt.Errorf("image file is required")
 	}
 	dataURL, err := fileToDataURL(imageFH, maxFileBytes)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	content = append(content, QwenContent{Image: dataURL})
 
 	if maskFH := firstFile(r, "mask"); maskFH != nil {
 		maskURL, err := fileToDataURL(maskFH, maxFileBytes)
 		if err != nil {
-			return nil, "", err
+			return nil, "", nil, err
 		}
 		content = append(content, QwenContent{Image: maskURL})
 	}
@@ -60,13 +61,30 @@ func ConvertEdits(r *http.Request, maxFileBytes int64, aliases map[string]string
 		},
 		Parameters: formParameters(r, model),
 	}
-	return q, responseFormat, nil
+	return q, responseFormat, droppedEditFields(r), nil
 }
 
-// formParameters maps multipart form fields (n, size, thinking) into Qwen
-// parameters.
+// droppedEditFields reports multipart fields that OpenAI accepts but Qwen has
+// no equivalent for (for logging; never nil).
+func droppedEditFields(r *http.Request) []string {
+	var d []string
+	for _, f := range []struct{ name, val string }{
+		{"user", r.FormValue("user")},
+		{"output_format", r.FormValue("output_format")},
+		{"background", r.FormValue("background")},
+		{"output_compression", r.FormValue("output_compression")},
+	} {
+		if f.val != "" {
+			d = append(d, f.name+"="+f.val)
+		}
+	}
+	return d
+}
+
+// formParameters maps multipart form fields (n, size, quality, thinking) into
+// Qwen parameters.
 func formParameters(r *http.Request, model string) map[string]any {
-	params := make(map[string]any, 3)
+	params := make(map[string]any, 4)
 	if n := r.FormValue("n"); n != "" {
 		if v, err := strconv.Atoi(n); err == nil {
 			params["n"] = clampN(v)
@@ -75,8 +93,14 @@ func formParameters(r *http.Request, model string) map[string]any {
 	if s := NormalizeSize(r.FormValue("size")); s != "" {
 		params["size"] = s
 	}
+	switch r.FormValue("quality") {
+	case "high":
+		params["prompt_extend"] = true
+	case "low":
+		params["prompt_extend"] = false
+	}
 	if t := r.FormValue("thinking"); t != "" && strings.HasPrefix(model, "qwen-image-3.0") {
-		params["thinking"] = t != "off"
+		params["enable_thinking"] = t != "off"
 	}
 	return params
 }
